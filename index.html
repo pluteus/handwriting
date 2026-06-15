@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>走り書きメモ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        html, body {
+            background: #ffffff;
+            color: #333333;
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+        /* === ツールバー === */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f0f0f0;
+            border-bottom: 1px solid #cccccc;
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        .toolbar-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            background: #333333;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.2s;
+        }
+
+        .toolbar-btn:active {
+            background: #e94560;
+        }
+
+        .toolbar-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* === 設定画面 === */
+        .settings-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .settings-overlay.show {
+            display: flex;
+        }
+
+        .settings-panel {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            width: 300px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .settings-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .settings-label {
+            font-size: 14px;
+        }
+
+        .settings-input {
+            width: 60px;
+            padding: 6px 10px;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .settings-unit {
+            font-size: 12px;
+            color: #888;
+            margin-left: 4px;
+        }
+
+        .settings-toggle {
+            position: relative;
+            width: 50px;
+            height: 28px;
+        }
+
+        .settings-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 28px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        .settings-toggle input:checked + .toggle-slider {
+            background-color: #e94560;
+        }
+
+        .settings-toggle input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .settings-close {
+            width: 100%;
+            padding: 10px;
+            background: #333333;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .settings-close:active {
+            background: #e94560;
+        }
+
+        /* === フルスクリーン === */
+        body.fullscreen .toolbar {
+            display: none;
+        }
+
+        body.fullscreen .display-area {
+            padding: 10px;
+        }
+
+        body.fullscreen .input-area {
+            /* JSによる動的制御を優先するため、固定のmax-heightを解除 */
+            max-height: none; 
+        }
+
+        body.fullscreen .guide-text {
+            display: none;
+        }
+
+        .exit-fullscreen {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            display: none;
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.fullscreen .exit-fullscreen {
+            display: flex;
+        }
+
+        /* === 表示エリア === */
+        .display-area {
+            flex: 1; /* 初期状態。JSで高さが固定されたら機能しなくなりますが初期計算用 */
+            min-height: 40px;
+            background: #ffffff;
+            padding: 20px;
+            overflow: auto;
+            position: relative;
+            padding-bottom: 60px;
+            -webkit-overflow-scrolling: touch;
+            touch-action: none;
+        }
+
+        body.fullscreen .display-area {
+            overscroll-behavior: none; /* フルスクリーン時の誤挙動防止 */
+        }
+
+        /* === ドラッグ可能な境界線 (スプリッター) === */
+        .resizer-bar {
+            height: 10px;
+            background: #cccccc;
+            border-top: 1px solid #b5b5b5;
+            border-bottom: 2px solid #b5b5b5;
+            cursor: ns-resize;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 150;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+        /* つまみ（ビジュアル用） */
+        .resizer-bar::after {
+            content: "";
+            width: 32px;
+            height: 4px;
+            background: #888888;
+            border-radius: 2px;
+        }
+        .resizer-bar:active {
+            background: #e94560;
+        }
+
+        .zoom-container {
+            transform-origin: top left;
+            display: inline-block;
+            min-width: 100%;
+        }
+
+        .char-item.selected,
+        .space-char.selected {
+            background: rgba(233, 69, 96, 0.3);
+            border-radius: 2px;
+        }
+
+        .char-item {
+            display: inline-block;
+            height: 32px;
+            margin: 0;
+            vertical-align: top;
+            position: relative;
+        }
+
+        .char-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: auto;
+        }
+
+        .space-char {
+            display: inline-block;
+            width: 16px;
+            height: 32px;
+            margin: 0;
+            vertical-align: top;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 32px;
+            background: #e94560;
+            animation: blink 1s infinite;
+            vertical-align: top;
+            margin: 0 1px;
+        }
+        .cursor.hidden {
+            display: none;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .line {
+            border-bottom: 1px solid #eeeeee;
+            min-height: 40px;
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            flex-wrap: nowrap;
+            overflow: visible;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        /* === 入力エリア === */
+        .input-area {
+            height: 200px; /* 初期高さ設定（後ほどJSで画面比率に合わせて最適化） */
+            min-height: 70px;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            gap: 8px;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        /* キャンバスラッパー: CSS変数ベースに完全移行 */
+        .canvas-wrapper {
+            position: relative;
+            flex-shrink: 0;
+            width: var(--cv-w, 160px);
+            height: var(--cv-h, 160px);
+        }
+        .canvas-wrapper canvas {
+            width: var(--cv-w, 160px) !important;
+            height: var(--cv-h, 160px) !important;
+            background: #ffffff;
+            border: 2px solid #999999;
+            border-radius: 4px;
+            cursor: crosshair;
+            display: block;
+            touch-action: none;
+        }
+
+        .canvas-wrapper.active {
+            box-shadow: 0 0 0 3px #e94560;
+            border-radius: 4px;
+        }
+
+        .canvas-wrapper.inactive {
+            opacity: 0.5;
+        }
+
+        .canvas-label {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            font-size: 10px;
+            color: #888888;
+            background: rgba(255,255,255,0.8);
+            padding: 2px 6px;
+            border-radius: 3px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .btn {
+            width: 54px;
+            height: 48px;
+            background: #333333;
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .btn:active {
+            background: #e94560;
+        }
+
+        .btn-backspace {
+            font-size: 18px;
+        }
+
+        .guide-text {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #888888;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        /* 疑似フルスクリーン用スタイル定義（CSS側へ完全移動） */
+        body.fullscreen {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100dvh;
+            overflow: hidden;
+            background: #ffffff;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar" id="toolbar">
+        <button class="toolbar-btn" id="btnShareKeep">
+            <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span>Keep共有</span>
+        </button>
+        <button class="toolbar-btn" id="btnSaveImage">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <span>保存</span>
+        </button>
+        <button class="toolbar-btn" id="btnSettings">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.16 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span>設定</span>
+        </button>
+        <button class="toolbar-btn" id="btnFullscreen">
+            <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            <span>最大化</span>
+        </button>
+    </div>
+
+    <button class="exit-fullscreen" id="btnExitFullscreen">✕</button>
+
+    <div class="settings-overlay" id="settingsOverlay">
+        <div class="settings-panel">
+            <div class="settings-title">設定</div>
+            <div class="settings-row">
+                <span class="settings-label">自動確定時間</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingAutoTime" value="1" min="1" max="30">
+                    <span class="settings-unit">秒</span>
+                </div>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">等幅フォント</span>
+                <label class="settings-toggle">
+                    <input type="checkbox" id="settingMonoWidth">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">プロポーショナル余白</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingPropMargin" value="1" min="0" max="10">
+                    <span class="settings-unit">px</span>
+                </div>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">文字解像度</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingCharRes" value="64" min="32" max="256" step="32">
+                    <span class="settings-unit">px</span>
+                </div>
+            </div>
+            <button class="settings-close" id="btnCloseSettings">閉じる</button>
+        </div>
+    </div>
+
+    <div class="display-area" id="displayArea">
+        <div class="zoom-container" id="zoomContainer">
+            <div class="line" id="currentLine">
+                <span class="cursor" id="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="resizer-bar" id="resizerBar"></div>
+
+    <div class="input-area" id="inputArea">
+        <div class="canvas-wrapper active" id="wrapper1">
+            <span class="canvas-label">左</span>
+            <canvas id="canvas1" width="320" height="320"></canvas>
+        </div>
+
+        <div class="canvas-wrapper" id="wrapper2">
+            <span class="canvas-label">右</span>
+            <canvas id="canvas2" width="320" height="320"></canvas>
+        </div>
+
+        <div class="buttons">
+            <button class="btn btn-backspace" id="btnBackspace">⌫</button>
+            <button class="btn btn-space" id="btnSpace">空白</button>
+            <button class="btn btn-enter" id="btnEnter">改行</button>
+        </div>
+        <div class="buttons">
+            <button class="btn" id="btnCopy">コピー</button>
+            <button class="btn" id="btnCut">切取</button>
+            <button class="btn" id="btnPaste">貼付</button>
+        </div>
+    </div>
+
+    <div class="guide-text">
+        一方に書き、もう一方に書くと確定 / <span id="autoTimeDisplay">1</span>秒で自動確定
+    </div>
+
+    <script>
+        const canvas1 = document.getElementById('canvas1');
+        const canvas2 = document.getElementById('canvas2');
+        const ctx1 = canvas1.getContext('2d');
+        const ctx2 = canvas2.getContext('2d');
+        const wrapper1 = document.getElementById('wrapper1');
+        const wrapper2 = document.getElementById('wrapper2');
+        const displayArea = document.getElementById('displayArea');
+        const inputArea = document.getElementById('inputArea');
+        const resizerBar = document.getElementById('resizerBar');
+
+        let currentLine = document.getElementById('currentLine');
+        let cursor = document.getElementById('cursor');
+
+        let hasDrawing1 = false;
+        let hasDrawing2 = false;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let currentCanvas = null;
+        let currentCtx = null;
+        let autoFinalizeTimer = null;
+        let AUTO_FINALIZE_DELAY = 1000;
+        let MONO_WIDTH = false;
+        let PROP_MARGIN = 1;
+        let CHAR_RESOLUTION = 64;
+
+        ctx1.lineCap = 'round';
+        ctx1.lineJoin = 'round';
+        ctx1.lineWidth = 6;
+        ctx1.strokeStyle = '#000000';
+
+        ctx2.lineCap = 'round';
+        ctx2.lineJoin = 'round';
+        ctx2.lineWidth = 6;
+        ctx2.strokeStyle = '#000000';
+
+        // 初期レイアウトの比率配分設定
+        function initLayoutSizes() {
+            const totalH = window.innerHeight;
+            const toolbarH = document.getElementById('toolbar').offsetHeight || 0;
+            const resizerH = resizerBar.offsetHeight || 10;
+            const availableH = totalH - toolbarH - resizerH;
+
+            // 初期配置は全体の下部35%を手書きエリアに割り当て
+            const initialInputH = Math.min(240, Math.max(140, Math.floor(availableH * 0.35)));
+            const initialDisplayH = availableH - initialInputH;
+
+            displayArea.style.flex = 'none';
+            displayArea.style.height = initialDisplayH + 'px';
+            inputArea.style.height = initialInputH + 'px';
+        }
+        initLayoutSizes();
+
+        // === 境界線（スプリッター）のドラッグ制御 ===
+        let isResizing = false;
+
+        function startResize(e) {
+            isResizing = true;
+            resizerBar.classList.add('active');
+            document.body.style.cursor = 'ns-resize';
+            if (e.cancelable) e.preventDefault();
+        }
+
+        function doResize(e) {
+            if (!isResizing) return;
+            
+            let clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientY = e.touches[0].clientY;
+            } else {
+                clientY = e.clientY;
+            }
+
+            const toolbarH = document.body.classList.contains('fullscreen') ? 0 : (document.getElementById('toolbar').offsetHeight || 0);
+            const resizerH = resizerBar.offsetHeight || 10;
+            const totalH = window.innerHeight;
+
+            // ドラッグ位置から各エリアの新しい高さを算出
+            let newDisplayH = clientY - toolbarH - (resizerH / 2);
+            let newInputH = totalH - clientY - (resizerH / 2);
+
+            // 最小値ガードの適用
+            const minDisplayH = 60;
+            const minInputH = 80;
+
+            if (newDisplayH < minDisplayH) {
+                newDisplayH = minDisplayH;
+                newInputH = totalH - toolbarH - resizerH - minDisplayH;
+            } else if (newInputH < minInputH) {
+                newInputH = minInputH;
+                newDisplayH = totalH - toolbarH - resizerH - minInputH;
+            }
+
+            displayArea.style.height = newDisplayH + 'px';
+            inputArea.style.height = newInputH + 'px';
+            
+            // レイアウト再計算のトリガー
+            checkLayout();
+        }
+
+        function endResize() {
+            if (!isResizing) return;
+            isResizing = false;
+            resizerBar.classList.remove('active');
+            document.body.style.cursor = '';
+        }
+
+        // スプリッターイベント登録
+        resizerBar.addEventListener('mousedown', startResize);
+        window.addEventListener('mousemove', doResize);
+        window.addEventListener('mouseup', endResize);
+
+        resizerBar.addEventListener('touchstart', startResize, { passive: false });
+        window.addEventListener('touchmove', doResize, { passive: false });
+        window.addEventListener('touchend', endResize);
+
+        function getPos(canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        function startAutoFinalizeTimer(canvasNum) {
+            clearAutoFinalizeTimer();
+            autoFinalizeTimer = setTimeout(function() {
+                if (canvasNum === 1 && hasDrawing1) {
+                    finalizeCharacter(1);
+                } else if (canvasNum === 2 && hasDrawing2) {
+                    finalizeCharacter(2);
+                }
+            }, AUTO_FINALIZE_DELAY);
+        }
+
+        function clearAutoFinalizeTimer() {
+            if (autoFinalizeTimer) {
+                clearTimeout(autoFinalizeTimer);
+                autoFinalizeTimer = null;
+            }
+        }
+
+        function startDraw(canvas, ctx, e) {
+            isDrawing = true;
+            currentCanvas = canvas;
+            currentCtx = ctx;
+            const pos = getPos(canvas, e);
+            lastX = pos.x;
+            lastY = pos.y;
+
+            if (canvas === canvas1) hasDrawing1 = true;
+            else hasDrawing2 = true;
+
+            if (canvas === canvas1 && hasDrawing2) {
+                finalizeCharacter(2);
+            } else if (canvas === canvas2 && hasDrawing1) {
+                finalizeCharacter(1);
+            }
+
+            startAutoFinalizeTimer(canvas === canvas1 ? 1 : 2);
+            updateActiveState();
+        }
+
+        function doDraw(e) {
+            if (!isDrawing || !currentCanvas || !currentCtx) return;
+            const pos = getPos(currentCanvas, e);
+
+            currentCtx.beginPath();
+            currentCtx.moveTo(lastX, lastY);
+            currentCtx.lineTo(pos.x, pos.y);
+            currentCtx.stroke();
+
+            lastX = pos.x;
+            lastY = pos.y;
+
+            if (currentCanvas === canvas1 && hasDrawing1) {
+                startAutoFinalizeTimer(1);
+            } else if (currentCanvas === canvas2 && hasDrawing2) {
+                startAutoFinalizeTimer(2);
+            }
+        }
+
+        function endDraw() {
+            isDrawing = false;
+            currentCanvas = null;
+            currentCtx = null;
+        }
+
+        function finalizeCharacter(canvasNum) {
+            clearAutoFinalizeTimer();
+
+            const sourceCanvas = canvasNum === 1 ? canvas1 : canvas2;
+            const sourceCtx = canvasNum === 1 ? ctx1 : ctx2;
+
+            const trimmed = trimCanvas(sourceCanvas);
+            if (!trimmed) {
+                if (canvasNum === 1) hasDrawing1 = false;
+                else hasDrawing2 = false;
+                updateActiveState();
+                return;
+            }
+
+            const srcSize = sourceCanvas.width;
+            const charRes = CHAR_RESOLUTION;
+            const displayH = 32;
+
+            const srcPixels = sourceCtx.getImageData(0, 0, srcSize, srcSize);
+            const sd = srcPixels.data;
+            const ALPHA_THRESHOLD = 32;
+            let srcMinX = srcSize, srcMaxX = 0;
+            for (let y = 0; y < srcSize; y++) {
+                for (let x = 0; x < srcSize; x++) {
+                    const alpha = sd[(y * srcSize + x) * 4 + 3];
+                    if (alpha > ALPHA_THRESHOLD) {
+                        if (x < srcMinX) srcMinX = x;
+                        if (x > srcMaxX) srcMaxX = x;
+                    }
+                }
+            }
+
+            if (srcMaxX === 0) {
+                if (canvasNum === 1) hasDrawing1 = false;
+                else hasDrawing2 = false;
+                updateActiveState();
+                return;
+            }
+
+            let finalCanvas;
+            let finalImgW;
+            let displayW;
+
+            if (!MONO_WIDTH) {
+                const scale = charRes / srcSize;
+                const displayScale = displayH / srcSize;
+                const srcMargin = Math.round(PROP_MARGIN / displayScale);
+
+                const cropSrcX = Math.max(0, srcMinX - srcMargin);
+                const cropSrcW = Math.min(srcSize - cropSrcX, srcMaxX - srcMinX + 1 + srcMargin * 2);
+                const cropSrcH = srcSize;
+
+                finalImgW = Math.max(1, Math.round(cropSrcW * scale));
+                displayW  = Math.max(1, Math.round(cropSrcW * displayScale + PROP_MARGIN * 2));
+
+                finalCanvas = document.createElement('canvas');
+                finalCanvas.width = finalImgW;
+                finalCanvas.height = charRes;
+                const finalCtx = finalCanvas.getContext('2d');
+                finalCtx.clearRect(0, 0, finalImgW, charRes);
+                finalCtx.drawImage(
+                    sourceCanvas,
+                    cropSrcX, 0, cropSrcW, cropSrcH,
+                    0, 0, finalImgW, charRes
+                );
+            } else {
+                finalCanvas = document.createElement('canvas');
+                finalCanvas.width = charRes;
+                finalCanvas.height = charRes;
+                const finalCtx = finalCanvas.getContext('2d');
+                finalCtx.clearRect(0, 0, charRes, charRes);
+                finalCtx.drawImage(sourceCanvas, 0, 0, srcSize, srcSize, 0, 0, charRes, charRes);
+                finalImgW = charRes;
+                displayW  = displayH;
+            }
+
+            const imgData = finalCanvas.toDataURL('image/png');
+
+            replaceSelectionWithCursor();
+
+            const charDiv = document.createElement('span');
+            charDiv.className = 'char-item';
+            charDiv.style.width = displayW + 'px';
+            charDiv.style.height = displayH + 'px';
+
+            const img = document.createElement('img');
+            img.src = imgData;
+            img.alt = '手書き文字';
+            charDiv.appendChild(img);
+
+            currentLine.insertBefore(charDiv, cursor);
+
+            sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+
+            if (canvasNum === 1) hasDrawing1 = false;
+            else hasDrawing2 = false;
+
+            displayArea.scrollTop = displayArea.scrollHeight;
+            updateActiveState();
+        }
+
+        function finalizeAll() {
+            if (hasDrawing1) finalizeCharacter(1);
+            if (hasDrawing2) finalizeCharacter(2);
+        }
+
+        function trimCanvas(canvas) {
+            const ctx = canvas.getContext('2d');
+            const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = pixels.data;
+
+            let minX = canvas.width, minY = canvas.height;
+            let maxX = 0, maxY = 0;
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const alpha = data[(y * canvas.width + x) * 4 + 3];
+                    if (alpha > 0) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            if (maxX === 0) return null;
+
+            const margin = MONO_WIDTH ? 0 : PROP_MARGIN;
+
+            return {
+                x: Math.max(0, minX - margin),
+                y: Math.max(0, minY - margin),
+                w: Math.min(canvas.width - minX + margin * 2, maxX - minX + margin * 2),
+                h: Math.min(canvas.height - minY + margin * 2, maxY - minY + margin * 2)
+            };
+        }
+
+        function updateActiveState() {
+            if (hasDrawing1 && !hasDrawing2) {
+                wrapper1.classList.add('active');
+                wrapper1.classList.remove('inactive');
+                wrapper2.classList.remove('active');
+                wrapper2.classList.remove('inactive');
+            } else if (!hasDrawing1 && hasDrawing2) {
+                wrapper1.classList.remove('active');
+                wrapper1.classList.remove('inactive');
+                wrapper2.classList.add('active');
+                wrapper2.classList.remove('inactive');
+            } else if (hasDrawing1 && hasDrawing2) {
+                wrapper1.classList.remove('active');
+                wrapper2.classList.remove('active');
+            } else {
+                wrapper1.classList.add('active');
+                wrapper1.classList.remove('inactive');
+                wrapper2.classList.remove('active');
+                wrapper2.classList.remove('inactive');
+            }
+        }
+
+        function moveCursorToNearestPosition(lineElement, tapX) {
+            const oldCursor = document.querySelector('.cursor');
+            if (oldCursor) oldCursor.remove();
+
+            const newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.id = 'cursor';
+
+            const children = Array.from(lineElement.children).filter(child => !child.classList.contains('cursor'));
+
+            if (children.length === 0) {
+                lineElement.appendChild(newCursor);
+            } else {
+                let closestIndex = 0;
+                let minDistance = Infinity;
+
+                for (let i = 0; i <= children.length; i++) {
+                    let refX;
+                    if (i === 0) {
+                        refX = children[0].getBoundingClientRect().left;
+                    } else if (i === children.length) {
+                        refX = children[children.length - 1].getBoundingClientRect().right;
+                    } else {
+                        const leftRect = children[i - 1].getBoundingClientRect();
+                        const rightRect = children[i].getBoundingClientRect();
+                        refX = (leftRect.right + rightRect.left) / 2;
+                    }
+
+                    const distance = Math.abs(tapX - refX);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestIndex = i;
+                    }
+                }
+
+                if (closestIndex === 0) {
+                    lineElement.insertBefore(newCursor, children[0]);
+                } else if (closestIndex >= children.length) {
+                    lineElement.appendChild(newCursor);
+                } else {
+                    lineElement.insertBefore(newCursor, children[closestIndex]);
+                }
+            }
+
+            currentLine.id = '';
+            lineElement.id = 'currentLine';
+            currentLine = lineElement;
+            cursor = newCursor;
+        }
+
+        function setupLineTapEvents() {
+            const lines = document.querySelectorAll('.line');
+            lines.forEach(line => {
+                line.addEventListener('click', function(e) {
+                    const tapX = e.clientX;
+                    moveCursorToNearestPosition(line, tapX);
+                });
+            });
+        }
+
+        setupLineTapEvents();
+
+        // === Pointer Events ===
+        if (window.PointerEvent) {
+            canvas1.addEventListener('pointerdown', function(e) {
+                e.preventDefault();
+                canvas1.setPointerCapture(e.pointerId);
+                startDraw(canvas1, ctx1, e);
+            });
+
+            canvas2.addEventListener('pointerdown', function(e) {
+                e.preventDefault();
+                canvas2.setPointerCapture(e.pointerId);
+                startDraw(canvas2, ctx2, e);
+            });
+
+            canvas1.addEventListener('pointermove', function(e) {
+                if (isDrawing && currentCanvas === canvas1) {
+                    e.preventDefault();
+                    doDraw(e);
+                }
+            });
+
+            canvas2.addEventListener('pointermove', function(e) {
+                if (isDrawing && currentCanvas === canvas2) {
+                    e.preventDefault();
+                    doDraw(e);
+                }
+            });
+
+            canvas1.addEventListener('pointerup', function(e) {
+                e.preventDefault();
+                endDraw();
+            });
+
+            canvas2.addEventListener('pointerup', function(e) {
+                e.preventDefault();
+                endDraw();
+            });
+
+            canvas1.addEventListener('pointercancel', function(e) {
+                e.preventDefault();
+                endDraw();
+            });
+
+            canvas2.addEventListener('pointercancel', function(e) {
+                e.preventDefault();
+                endDraw();
+            });
+        } else {
+            canvas1.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                startDraw(canvas1, ctx1, e);
+            }, {passive: false});
+
+            canvas1.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                doDraw(e);
+            }, {passive: false});
+
+            canvas1.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                endDraw();
+            }, {passive: false});
+
+            canvas1.addEventListener('touchcancel', function(e) {
+                e.preventDefault();
+                endDraw();
+            }, {passive: false});
+
+            canvas2.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                startDraw(canvas2, ctx2, e);
+            }, {passive: false});
+
+            canvas2.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                doDraw(e);
+            }, {passive: false});
+
+            canvas2.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                endDraw();
+            }, {passive: false});
+
+            canvas2.addEventListener('touchcancel', function(e) {
+                e.preventDefault();
+                endDraw();
+            }, {passive: false});
+        }
+
+        // === マウスイベント ===
+        canvas1.addEventListener('mousedown', function(e) {
+            startDraw(canvas1, ctx1, e);
+        });
+
+        canvas2.addEventListener('mousedown', function(e) {
+            startDraw(canvas2, ctx2, e);
+        });
+
+        window.addEventListener('mousemove', function(e) {
+            doDraw(e);
+        });
+
+        window.addEventListener('mouseup', function(e) {
+            endDraw();
+        });
+
+        // === ボタン ===
+        document.getElementById('btnBackspace').addEventListener('click', function() {
+            finalizeAll();
+            const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+            if (selected.length > 0) {
+                selected.forEach(el => el.remove());
+            } else {
+                const chars = currentLine.querySelectorAll('.char-item, .space-char');
+                if (chars.length > 0) {
+                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+                    if (cursorIndex > 0) {
+                        currentLine.children[cursorIndex - 1].remove();
+                    }
+                }
+            }
+        });
+
+        function replaceSelectionWithCursor() {
+            const sel = getSelectedElements();
+            if (sel.length === 0) return false;
+
+            const firstSel = sel[0];
+            const parentLine = firstSel.parentNode;
+
+            parentLine.insertBefore(cursor, firstSel);
+            currentLine = parentLine;
+
+            sel.forEach(el => el.remove());
+            cursor.classList.remove('hidden');
+            return true;
+        }
+
+        let internalClipboard = [];
+
+        function getSelectedElements() {
+            const all = Array.from(document.querySelectorAll(
+                '#zoomContainer .char-item, #zoomContainer .space-char'));
+            return all.filter(el => el.classList.contains('selected'));
+        }
+
+        function cloneCharEl(el) {
+            const span = document.createElement('span');
+            span.className = el.className.replace(' selected', '');
+            span.style.cssText = el.style.cssText;
+            if (el.classList.contains('char-item')) {
+                const img = document.createElement('img');
+                img.src = el.querySelector('img').src;
+                img.alt = '手書き文字';
+                span.appendChild(img);
+            }
+            return span;
+        }
+
+        function copySelectedToClipboard() {
+            const sel = getSelectedElements();
+            if (sel.length === 0) return false;
+
+            const groups = [];
+            let currentGroup = [];
+            let prevLine = null;
+
+            for (const el of sel) {
+                const line = el.parentNode;
+                if (prevLine && line !== prevLine) {
+                    groups.push(currentGroup);
+                    currentGroup = [];
+                }
+                currentGroup.push(cloneCharEl(el));
+                prevLine = line;
+            }
+            if (currentGroup.length > 0) groups.push(currentGroup);
+
+            internalClipboard = groups;
+            return true;
+        }
+
+        function pasteFromClipboard() {
+            if (internalClipboard.length === 0) return;
+
+            for (let gi = 0; gi < internalClipboard.length; gi++) {
+                const group = internalClipboard[gi];
+
+                if (gi > 0) {
+                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+                    const allChildren = Array.from(currentLine.children);
+                    const elementsToMove = [];
+                    for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+                        elementsToMove.push(allChildren[i]);
+                    }
+                    const newLine = document.createElement('div');
+                    newLine.className = 'line';
+                    const newCursor = document.createElement('span');
+                    newCursor.className = 'cursor';
+                    newCursor.id = 'cursor';
+                    newLine.appendChild(newCursor);
+                    elementsToMove.forEach(el => newLine.appendChild(el));
+                    currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+                    const oldCursor = currentLine.querySelector('.cursor');
+                    if (oldCursor) oldCursor.remove();
+                    currentLine.id = '';
+                    newLine.id = 'currentLine';
+                    currentLine = newLine;
+                    cursor = newCursor;
+                    setupLineTapEvents();
+                }
+
+                for (const el of group) {
+                    currentLine.insertBefore(cloneCharEl(el), cursor);
+                }
+            }
+        }
+
+        document.getElementById('btnCopy').addEventListener('click', function() {
+            finalizeAll();
+            copySelectedToClipboard();
+        });
+
+        document.getElementById('btnCut').addEventListener('click', function() {
+            finalizeAll();
+            if (!copySelectedToClipboard()) return;
+            getSelectedElements().forEach(el => el.remove());
+        });
+
+        document.getElementById('btnPaste').addEventListener('click', function() {
+            finalizeAll();
+            if (internalClipboard.length === 0) return;
+            replaceSelectionWithCursor();
+            pasteFromClipboard();
+        });
+
+        document.getElementById('btnSpace').addEventListener('click', function() {
+            finalizeAll();
+            replaceSelectionWithCursor();
+            const space = document.createElement('span');
+            space.className = 'space-char';
+            currentLine.insertBefore(space, cursor);
+        });
+
+        document.getElementById('btnEnter').addEventListener('click', function() {
+            finalizeAll();
+            replaceSelectionWithCursor();
+
+            const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+            const allChildren = Array.from(currentLine.children);
+
+            const elementsToMove = [];
+            for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+                elementsToMove.push(allChildren[i]);
+            }
+
+            const newLine = document.createElement('div');
+            newLine.className = 'line';
+
+            const newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.id = 'cursor';
+            newLine.appendChild(newCursor);
+
+            elementsToMove.forEach(function(el) {
+                newLine.appendChild(el);
+            });
+
+            currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+
+            const oldCursor = currentLine.querySelector('.cursor');
+            if (oldCursor) oldCursor.remove();
+
+            currentLine.id = '';
+            newLine.id = 'currentLine';
+            currentLine = newLine;
+            cursor = newCursor;
+
+            setupLineTapEvents();
+            displayArea.scrollTop = displayArea.scrollHeight;
+        });
+
+        // === ツールバー機能 ===
+        function captureDisplayArea() {
+            finalizeAll();
+
+            const lines = document.querySelectorAll('.line');
+            if (lines.length === 0) return null;
+
+            const captureCanvas = document.createElement('canvas');
+            const padding = 20;
+            const lineHeight = 44;
+
+            let maxWidth = 0;
+            lines.forEach(line => {
+                const chars = line.querySelectorAll('.char-item, .space-char');
+                let width = padding * 2;
+                chars.forEach(char => {
+                    const rect = char.getBoundingClientRect();
+                    width += rect.width + 4;
+                });
+                if (width > maxWidth) maxWidth = width;
+            });
+
+            captureCanvas.width = Math.max(maxWidth, 400);
+            captureCanvas.height = lines.length * lineHeight + padding * 2;
+
+            const cctx = captureCanvas.getContext('2d');
+            cctx.fillStyle = '#ffffff';
+            cctx.fillRect(0, 0, captureCanvas.width, captureCanvas.height);
+
+            cctx.strokeStyle = '#eeeeee';
+            cctx.lineWidth = 1;
+
+            lines.forEach((line, lineIdx) => {
+                const y = padding + lineIdx * lineHeight;
+                cctx.beginPath();
+                cctx.moveTo(0, y + lineHeight - 4);
+                cctx.lineTo(captureCanvas.width, y + lineHeight - 4);
+                cctx.stroke();
+
+                let x = padding;
+                const chars = line.querySelectorAll('.char-item, .space-char');
+                chars.forEach((char) => {
+                    if (char.classList.contains('space-char')) {
+                        x += 16;
+                    } else {
+                        const img = char.querySelector('img');
+                        if (img && img.complete) {
+                            const w = parseInt(char.style.width) || 32;
+                            cctx.drawImage(img, x, y, w, 32);
+                            x += w + 4;
+                        }
+                    }
+                });
+            });
+
+            return captureCanvas;
+        }
+
+        document.getElementById('btnShareKeep').addEventListener('click', function() {
+            const captureCanvas = captureDisplayArea();
+            if (!captureCanvas) return;
+
+            captureCanvas.toBlob(function(blob) {
+                const file = new File([blob], 'handwriting.png', { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({
+                        files: [file],
+                        title: '走り書きメモ',
+                        text: '手書きメモを共有します'
+                    }).catch(function(err) {
+                        console.log('Share cancelled', err);
+                    });
+                } else {
+                    const url = captureCanvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'handwriting.png';
+                    a.click();
+                    alert('共有機能が利用できないため、画像をダウンロードしました。Google Keepに手動でアップロードしてください。');
+                }
+            });
+        });
+
+        document.getElementById('btnSaveImage').addEventListener('click', function() {
+            const captureCanvas = captureDisplayArea();
+            if (!captureCanvas) return;
+
+            const url = captureCanvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'handwriting_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.png';
+            a.click();
+        });
+
+        // 設定
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const settingAutoTime = document.getElementById('settingAutoTime');
+        const settingMonoWidth = document.getElementById('settingMonoWidth');
+        const settingPropMargin = document.getElementById('settingPropMargin');
+        const settingCharRes = document.getElementById('settingCharRes');
+        const autoTimeDisplay = document.getElementById('autoTimeDisplay');
+
+        document.getElementById('btnSettings').addEventListener('click', function() {
+            settingsOverlay.classList.add('show');
+        });
+
+        document.getElementById('btnCloseSettings').addEventListener('click', function() {
+            const newTime = parseInt(settingAutoTime.value, 10);
+            if (newTime >= 1 && newTime <= 30) {
+                AUTO_FINALIZE_DELAY = newTime * 1000;
+                autoTimeDisplay.textContent = newTime;
+            }
+            MONO_WIDTH = settingMonoWidth.checked;
+            const newMargin = parseInt(settingPropMargin.value, 10);
+            if (!isNaN(newMargin) && newMargin >= 0 && newMargin <= 10) {
+                PROP_MARGIN = newMargin;
+            }
+            const newCharRes = parseInt(settingCharRes.value, 10);
+            if (!isNaN(newCharRes) && newCharRes >= 32 && newCharRes <= 256) {
+                CHAR_RESOLUTION = newCharRes;
+            }
+            settingsOverlay.classList.remove('show');
+        });
+
+        settingsOverlay.addEventListener('click', function(e) {
+            if (e.target === settingsOverlay) {
+                settingsOverlay.classList.remove('show');
+            }
+        });
+
+        // フルスクリーン
+        document.getElementById('btnFullscreen').addEventListener('click', function() {
+            document.body.classList.add('fullscreen');
+            // 高さをフルスクリーン用に即時再計算
+            const resizerH = resizerBar.offsetHeight || 10;
+            const savedInputH = parseInt(inputArea.style.height) || 200;
+            displayArea.style.height = (window.innerHeight - savedInputH - resizerH) + 'px';
+            checkLayout();
+        });
+
+        document.getElementById('btnExitFullscreen').addEventListener('click', function() {
+            document.body.classList.remove('fullscreen');
+            // 高さを通常モード用に即時再計算
+            const toolbarH = document.getElementById('toolbar').offsetHeight || 0;
+            const resizerH = resizerBar.offsetHeight || 10;
+            const savedInputH = parseInt(inputArea.style.height) || 200;
+            displayArea.style.height = (window.innerHeight - toolbarH - savedInputH - resizerH) + 'px';
+            checkLayout();
+        });
+
+        document.body.addEventListener('touchmove', function(e) {
+            if (document.body.classList.contains('fullscreen')) {
+                // スプリッタードラッグ中、または描画中でなければ全画面固定用に抑制
+                if (!isResizing && !isDrawing) {
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+
+        updateActiveState();
+
+        document.querySelectorAll('.btn').forEach(function(btn) {
+            let lastTap = 0;
+            btn.addEventListener('touchend', function(e) {
+                const now = Date.now();
+                if (now - lastTap < 350) {
+                    e.preventDefault();
+                }
+                lastTap = now;
+            }, { passive: false });
+        });
+
+        // === 【重要】ダイナミック・レスポンシブ・キャンバス計算ロジック ===
+        const FIXED_ELEMENTS_W = (10 * 2) + (8 * 3) + (54 * 2); // padding(20) + gap3つ(24) + ボタン2列(108)
+
+        function checkLayout() {
+            const totalW = inputArea.offsetWidth;
+            const totalH = inputArea.clientHeight;
+
+            const paddingY = 10 * 2; // 上下パディング
+            const availableW = totalW - FIXED_ELEMENTS_W; // キャンバス2枚に割当可能な最大幅
+            const availableH = totalH - paddingY;         // 手書きエリア内でボタンをはみ出させずに使える最大高さ
+
+            // 1. まずは「完全な正方形」で両方が手書きエリア内に最大化して収まる限界サイズを計算
+            let sqSize = Math.floor(availableW / 2);
+            if (sqSize > availableH) {
+                sqSize = availableH;
+            }
+
+            // 右側のボタンが縦方向（availableH）にはみ出さないかチェック
+            // ボタンがはみ出さない（かつキャンバスに最低限の幅が残る）場合
+            if (sqSize >= 80) {
+                // 正方形最大化モード
+                inputArea.style.setProperty('--cv-w', sqSize + 'px');
+                inputArea.style.setProperty('--cv-h', sqSize + 'px');
+            } else {
+                // 2. 正方形にするとボタンがはみ出す（または極端に狭くなる）場合の「縦長長方形最大化」処理
+                const rectW = Math.max(40, Math.floor(availableW / 2));
+                // 高さはボタン群が綺麗に収まる手書きエリア内いっぱいの高さ、ただし160pxを上限とする
+                const rectH = Math.min(160, availableH);
+
+                inputArea.style.setProperty('--cv-w', rectW + 'px');
+                inputArea.style.setProperty('--cv-h', rectH + 'px');
+            }
+        }
+
+        // 監視の統合
+        const ro = new ResizeObserver(checkLayout);
+        ro.observe(inputArea);
+        window.addEventListener('resize', checkLayout);
+        checkLayout();
+
+        // === displayArea タッチ統合制御 ===
+        (function() {
+            const zoomContainer = document.getElementById('zoomContainer');
+            let currentScale = 1.0;
+            const MIN_SCALE = 0.5;
+            const MAX_SCALE = 4.0;
+            const LONG_PRESS_MS = 500;
+
+            let mode = 'idle';
+            let selectStartEl = null;
+            let selectEndEl   = null;
+            let touchStartX = 0, touchStartY = 0;
+            let longPressTimer = null;
+            let scrollStartX = 0, scrollStartY = 0;
+            let scrollOriginLeft = 0, scrollOriginTop = 0;
+            let pinchStartDist = 0;
+            let pinchStartScale = 1.0;
+
+            function getTouchDist(t) {
+                const dx = t[0].clientX - t[1].clientX;
+                const dy = t[0].clientY - t[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            function charAtPoint(x, y) {
+                const els = zoomContainer.querySelectorAll('.char-item, .space-char');
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
+                }
+                return null;
+            }
+
+            function updateSelection(startEl, endEl) {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                if (!startEl || !endEl) return;
+                const all = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                const si = all.indexOf(startEl);
+                const ei = all.indexOf(endEl);
+                if (si < 0 || ei < 0) return;
+                const lo = Math.min(si, ei), hi = Math.max(si, ei);
+                for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
+            }
+
+            function clearSelection() {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                cursor.classList.remove('hidden');
+            }
+
+            function cancelLongPress() {
+                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+            }
+
+            function moveCursorToPoint(x, y) {
+                const els = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                if (els.length === 0) return;
+                let nearest = null, nearestDist = Infinity;
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    const cx = (r.left + r.right) / 2;
+                    const cy = (r.top + r.bottom) / 2;
+                    const dist = Math.abs(cx - x) + Math.abs(cy - y) * 2;
+                    if (dist < nearestDist) { nearestDist = dist; nearest = el; }
+                }
+                if (!nearest) return;
+                const r = nearest.getBoundingClientRect();
+                const cx = (r.left + r.right) / 2;
+                if (x < cx) {
+                    nearest.parentNode.insertBefore(cursor, nearest);
+                } else {
+                    nearest.parentNode.insertBefore(cursor, nearest.nextSibling);
+                }
+                currentLine = cursor.parentNode;
+            }
+
+            displayArea.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    touchStartX = t.clientX;
+                    touchStartY = t.clientY;
+                    mode = 'longpress_pending';
+                    cancelLongPress();
+                    longPressTimer = setTimeout(function() {
+                        mode = 'selecting';
+                        selectStartEl = charAtPoint(touchStartX, touchStartY);
+                        selectEndEl = selectStartEl;
+                        clearSelection();
+                        if (selectStartEl) selectStartEl.classList.add('selected');
+                        cursor.classList.add('hidden');
+                    }, LONG_PRESS_MS);
+                } else if (e.touches.length === 2) {
+                    cancelLongPress();
+                    mode = 'pinching';
+                    const dist = getTouchDist(e.touches);
+                    pinchStartDist  = dist;
+                    pinchStartScale = currentScale;
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    scrollStartX = mx;
+                    scrollStartY = my;
+                    scrollOriginLeft = displayArea.scrollLeft;
+                    scrollOriginTop  = displayArea.scrollTop;
+                    clearSelection();
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            displayArea.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    const dx = t.clientX - touchStartX;
+                    const dy = t.clientY - touchStartY;
+                    const moved = Math.sqrt(dx*dx + dy*dy);
+
+                    if (mode === 'longpress_pending') {
+                        if (moved > 8) { cancelLongPress(); mode = 'idle'; }
+                    } else if (mode === 'selecting') {
+                        const el = charAtPoint(t.clientX, t.clientY);
+                        if (el && el !== selectEndEl) {
+                            selectEndEl = el;
+                            updateSelection(selectStartEl, selectEndEl);
+                        }
+                    }
+                } else if (e.touches.length === 2) {
+                    const dist = getTouchDist(e.touches);
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const pinchRatio = dist / pinchStartDist;
+                    const scrollDX   = mx - scrollStartX;
+                    const scrollDY   = my - scrollStartY;
+
+                    let newScale = pinchStartScale * pinchRatio;
+                    newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
+                    currentScale = newScale;
+                    zoomContainer.style.transform = 'scale(' + currentScale + ')';
+
+                    displayArea.scrollLeft = scrollOriginLeft - scrollDX;
+                    displayArea.scrollTop  = scrollOriginTop  - scrollDY;
+                }
+            }, { passive: false });
+
+            displayArea.addEventListener('touchend', function(e) {
+                if (e.touches.length === 0) {
+                    if (mode === 'longpress_pending') {
+                        cancelLongPress();
+                        moveCursorToPoint(touchStartX, touchStartY);
+                        clearSelection();
+                        cursor.classList.remove('hidden');
+                    }
+                    if (mode !== 'selecting') mode = 'idle';
+                }
+            }, { passive: true });
+
+            displayArea.addEventListener('click', function(e) {
+                const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) {
+                    clearSelection();
+                    mode = 'idle';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
