@@ -1410,7 +1410,7 @@
         })();
 
 
-        // === displayArea タッチ＆マウスドラッグ統合制御（最新版） ===
+        // === displayArea タッチ＆マウスドラッグ統合制御（完全対策版） ===
         (function() {
             const zoomContainer = document.getElementById('zoomContainer');
             let currentScale = 1.0;
@@ -1419,6 +1419,7 @@
             const LONG_PRESS_MS = 500; 
 
             let mode = 'idle'; // 'idle', 'longpress_pending', 'selecting', 'scrolling_1finger', 'pinching', 'mouse_selecting'
+            let mouseDragged = false; // マウスドラッグが行われたかどうかのフラグ
 
             let selectStartEl = null;
             let selectEndEl   = null;
@@ -1515,28 +1516,28 @@
                 currentLine.id = 'currentLine';
             }
 
-            // === [新規追加] マウスの左ドラッグ範囲選択イベント ===
+            // === マウスの左ドラッグ範囲選択イベント ===
             displayArea.addEventListener('mousedown', function(e) {
-                // 左クリック(button === 0)以外、または下端リサイズ境界付近のクリックなら処理しない
                 if (e.button !== 0) return;
                 if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
 
-                // 文字の上でドラッグが開始されたか確認
                 const startEl = charAtPoint(e.clientX, e.clientY);
                 if (startEl) {
                     mode = 'mouse_selecting';
+                    mouseDragged = false; // フラグをリセット
                     selectStartEl = startEl;
                     selectEndEl = startEl;
                     clearSelection();
                     selectStartEl.classList.add('selected');
                     cursor.classList.add('hidden');
-                    e.preventDefault(); // テキストとしてのブラウザ標準選択を防ぐ
+                    e.preventDefault(); 
                 }
             });
 
             window.addEventListener('mousemove', function(e) {
                 if (mode !== 'mouse_selecting') return;
 
+                mouseDragged = true; // ドラッグが移動したことを記録
                 const el = charAtPoint(e.clientX, e.clientY);
                 if (el && el !== selectEndEl) {
                     selectEndEl = el;
@@ -1544,16 +1545,31 @@
                 }
             });
 
-            // === 修正版：マウスを離したときの処理 ===
             window.addEventListener('mouseup', function(e) {
                 if (mode === 'mouse_selecting') {
-                    // ボタンを離した直後に発生する click イベントによる選択解除を防ぐため、
-                    // わずかにタイミングを遅らせてから idle 状態に戻します
-                    setTimeout(function() {
-                        mode = 'idle';
-                    }, 50);
+                    mode = 'idle';
+                    // ドラッグが一度でも行われていたら、イベントの伝播をここで一度止めるための準備
                 }
             });
+
+            // 背景クリック時の選択解除処理
+            displayArea.addEventListener('click', function(e) {
+                // マウスドラッグ選択の直後のクリックイベントだった場合は、解除処理を完全にブロックする
+                if (mouseDragged) {
+                    mouseDragged = false; // フラグを戻す
+                    e.stopPropagation();
+                    e.preventDefault();
+                    return;
+                }
+
+                const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) {
+                    clearSelection();
+                    mode = 'idle';
+                }
+            }, true); // キャプチャリングフェーズ(true)で最優先でインターセプトします
+
+
             // === タッチイベント制御（既存処理の維持） ===
             displayArea.addEventListener('touchstart', function(e) {
                 if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) {
@@ -1657,14 +1673,6 @@
                     if (mode !== 'selecting') mode = 'idle';
                 }
             }, { passive: true });
-
-            displayArea.addEventListener('click', function(e) {
-                const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
-                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) {
-                    clearSelection();
-                    mode = 'idle';
-                }
-            });
         })();
         // === キーボードイベント制御 ===
         // === ここから追加：キーボードイベント制御（上下矢印修正版） ===
