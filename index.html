@@ -507,7 +507,7 @@
         一方に書き、もう一方に書くと確定 / <span id="autoTimeDisplay">1</span>秒で自動確定
     </div>
 
-    <script>
+<script>
         const canvas1 = document.getElementById('canvas1');
         const canvas2 = document.getElementById('canvas2');
         const ctx1 = canvas1.getContext('2d');
@@ -787,8 +787,7 @@
             }
         }
 
-function moveCursorToNearestPosition(lineElement, tapX) {
-//          【最優先追加】カーソルが移動したときは、理由を問わず画面上のすべての範囲選択を強制解除する
+        function moveCursorToNearestPosition(lineElement, tapX) {
             document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
             
             const oldCursor = document.querySelector('.cursor');
@@ -800,7 +799,6 @@ function moveCursorToNearestPosition(lineElement, tapX) {
 
             const children = Array.from(lineElement.children).filter(child => !child.classList.contains('cursor'));
 
-            // 改行のみ（文字要素がゼロ）の空の行をタップした場合は無条件で行頭に配置
             if (children.length === 0) {
                 lineElement.appendChild(newCursor);
             } else {
@@ -839,7 +837,7 @@ function moveCursorToNearestPosition(lineElement, tapX) {
             lineElement.id = 'currentLine';
             currentLine = lineElement;
             cursor = newCursor;
-        } // ★不足していた閉じカッコをここに復元しました
+        }
 
         function setupLineTapEvents() {
             const lines = document.querySelectorAll('.line');
@@ -850,144 +848,43 @@ function moveCursorToNearestPosition(lineElement, tapX) {
                 };
             });
         }
-
         setupLineTapEvents();
 
-        // === Pointer Events ===
+        // === 手書きキャンバス用 描画イベント群の登録 ===
         if (window.PointerEvent) {
-            canvas1.addEventListener('pointerdown', function(e) {
-                e.preventDefault();
-                canvas1.setPointerCapture(e.pointerId);
-                startDraw(canvas1, ctx1, e);
-            });
-
-            canvas2.addEventListener('pointerdown', function(e) {
-                e.preventDefault();
-                canvas2.setPointerCapture(e.pointerId);
-                startDraw(canvas2, ctx2, e);
-            });
-
-            canvas1.addEventListener('pointermove', function(e) {
-                if (isDrawing && currentCanvas === canvas1) {
-                    e.preventDefault();
-                    doDraw(e);
-                }
-            });
-
-            canvas2.addEventListener('pointermove', function(e) {
-                if (isDrawing && currentCanvas === canvas2) {
-                    e.preventDefault();
-                    doDraw(e);
-                }
-            });
-
-            canvas1.addEventListener('pointerup', function(e) {
-                e.preventDefault();
-                endDraw();
-            });
-
-            canvas2.addEventListener('pointerup', function(e) {
-                e.preventDefault();
-                endDraw();
-            });
-
-            canvas1.addEventListener('pointercancel', function(e) {
-                e.preventDefault();
-                endDraw();
-            });
-
-            canvas2.addEventListener('pointercancel', function(e) {
-                e.preventDefault();
-                endDraw();
-            });
+            canvas1.addEventListener('pointerdown', function(e) { e.preventDefault(); canvas1.setPointerCapture(e.pointerId); startDraw(canvas1, ctx1, e); });
+            canvas2.addEventListener('pointerdown', function(e) { e.preventDefault(); canvas2.setPointerCapture(e.pointerId); startDraw(canvas2, ctx2, e); });
+            canvas1.addEventListener('pointermove', function(e) { if (isDrawing && currentCanvas === canvas1) { e.preventDefault(); doDraw(e); } });
+            canvas2.addEventListener('pointermove', function(e) { if (isDrawing && currentCanvas === canvas2) { e.preventDefault(); doDraw(e); } });
+            canvas1.addEventListener('pointerup', function(e) { e.preventDefault(); endDraw(); });
+            canvas2.addEventListener('pointerup', function(e) { e.preventDefault(); endDraw(); });
+            canvas1.addEventListener('pointercancel', function(e) { e.preventDefault(); endDraw(); });
+            canvas2.addEventListener('pointercancel', function(e) { e.preventDefault(); endDraw(); });
         } else {
-            canvas1.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                startDraw(canvas1, ctx1, e);
-            }, {passive: false});
-
-            canvas1.addEventListener('touchmove', function(e) {
-                e.preventDefault();
-                doDraw(e);
-            }, {passive: false});
-
-            canvas1.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                endDraw();
-            }, {passive: false});
-
-            canvas1.addEventListener('touchcancel', function(e) {
-                e.preventDefault();
-                endDraw();
-            }, {passive: false});
-
-            canvas2.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                startDraw(canvas2, ctx2, e);
-            }, {passive: false});
-
-            canvas2.addEventListener('touchmove', function(e) {
-                e.preventDefault();
-                doDraw(e);
-            }, {passive: false});
-
-            canvas2.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                endDraw();
-            }, {passive: false});
-
-            canvas2.addEventListener('touchcancel', function(e) {
-                e.preventDefault();
-                endDraw();
-            }, {passive: false});
+            canvas1.addEventListener('touchstart', function(e) { e.preventDefault(); startDraw(canvas1, ctx1, e); }, {passive: false});
+            canvas1.addEventListener('touchmove', function(e) { e.preventDefault(); doDraw(e); }, {passive: false});
+            canvas1.addEventListener('touchend', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+            canvas1.addEventListener('touchcancel', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+            canvas2.addEventListener('touchstart', function(e) { e.preventDefault(); startDraw(canvas2, ctx2, e); }, {passive: false});
+            canvas2.addEventListener('touchmove', function(e) { e.preventDefault(); doDraw(e); }, {passive: false});
+            canvas2.addEventListener('touchend', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+            canvas2.addEventListener('touchcancel', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
         }
+        canvas1.addEventListener('mousedown', function(e) { startDraw(canvas1, ctx1, e); });
+        canvas2.addEventListener('mousedown', function(e) { startDraw(canvas2, ctx2, e); });
+        window.addEventListener('mousemove', function(e) { doDraw(e); });
+        window.addEventListener('mouseup', function(e) { endDraw(); });
 
-        // === マウスイベント ===
-        canvas1.addEventListener('mousedown', function(e) {
-            startDraw(canvas1, ctx1, e);
-        });
 
-        canvas2.addEventListener('mousedown', function(e) {
-            startDraw(canvas2, ctx2, e);
-        });
-
-        window.addEventListener('mousemove', function(e) {
-            doDraw(e);
-        });
-
-        window.addEventListener('mouseup', function(e) {
-            endDraw();
-        });
-
-        // === ボタン ===
-        document.getElementById('btnBackspace').addEventListener('click', function() {
-            finalizeAll();
-            const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
-            if (selected.length > 0) {
-                selected.forEach(el => el.remove());
-            } else {
-                const chars = currentLine.querySelectorAll('.char-item, .space-char');
-                if (chars.length > 0) {
-                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
-                    if (cursorIndex > 0) {
-                        currentLine.children[cursorIndex - 1].remove();
-                    }
-                }
-            }
-        });
-
+        // === コピペ基本ロジック関数 ===
         function replaceSelectionWithCursor() {
             const sel = getSelectedElements();
             if (sel.length === 0) return false;
-
             const firstSel = sel[0];
             const parentLine = firstSel.parentNode;
-
             parentLine.insertBefore(cursor, firstSel);
             currentLine = parentLine;
-
             sel.forEach(el => el.remove());
-
             cursor.classList.remove('hidden');
             return true;
         }
@@ -995,8 +892,7 @@ function moveCursorToNearestPosition(lineElement, tapX) {
         let internalClipboard = [];
 
         function getSelectedElements() {
-            const all = Array.from(document.querySelectorAll(
-                '#zoomContainer .char-item, #zoomContainer .space-char'));
+            const all = Array.from(document.querySelectorAll('#zoomContainer .char-item, #zoomContainer .space-char'));
             return all.filter(el => el.classList.contains('selected'));
         }
 
@@ -1016,11 +912,9 @@ function moveCursorToNearestPosition(lineElement, tapX) {
         function copySelectedToClipboard() {
             const sel = getSelectedElements();
             if (sel.length === 0) return false;
-
             const groups = [];
             let currentGroup = [];
             let prevLine = null;
-
             for (const el of sel) {
                 const line = el.parentNode;
                 if (prevLine && line !== prevLine) {
@@ -1031,17 +925,14 @@ function moveCursorToNearestPosition(lineElement, tapX) {
                 prevLine = line;
             }
             if (currentGroup.length > 0) groups.push(currentGroup);
-
             internalClipboard = groups;
             return true;
         }
 
         function pasteFromClipboard() {
             if (internalClipboard.length === 0) return;
-
             for (let gi = 0; gi < internalClipboard.length; gi++) {
                 const group = internalClipboard[gi];
-
                 if (gi > 0) {
                     const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
                     const allChildren = Array.from(currentLine.children);
@@ -1065,12 +956,28 @@ function moveCursorToNearestPosition(lineElement, tapX) {
                     cursor = newCursor;
                     setupLineTapEvents();
                 }
-
                 for (const el of group) {
                     currentLine.insertBefore(cloneCharEl(el), cursor);
                 }
             }
         }
+
+        // === バックスペース・空白・改行ボタンイベント ===
+        document.getElementById('btnBackspace').addEventListener('click', function() {
+            finalizeAll();
+            const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+            if (selected.length > 0) {
+                selected.forEach(el => el.remove());
+            } else {
+                const chars = currentLine.querySelectorAll('.char-item, .space-char');
+                if (chars.length > 0) {
+                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+                    if (cursorIndex > 0) {
+                        currentLine.children[cursorIndex - 1].remove();
+                    }
+                }
+            }
+        });
 
         document.getElementById('btnSpace').addEventListener('click', function() {
             finalizeAll();
@@ -1083,314 +990,32 @@ function moveCursorToNearestPosition(lineElement, tapX) {
         document.getElementById('btnEnter').addEventListener('click', function() {
             finalizeAll();
             replaceSelectionWithCursor();
-
             const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
             const allChildren = Array.from(currentLine.children);
-
             const elementsToMove = [];
             for (let i = cursorIndex + 1; i < allChildren.length; i++) {
                 elementsToMove.push(allChildren[i]);
             }
-
             const newLine = document.createElement('div');
             newLine.className = 'line';
-
             const newCursor = document.createElement('span');
             newCursor.className = 'cursor';
             newCursor.id = 'cursor';
             newLine.appendChild(newCursor);
-
-            elementsToMove.forEach(function(el) {
-                newLine.appendChild(el);
-            });
-
+            elementsToMove.forEach(el => newLine.appendChild(el));
             currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
-
             const oldCursor = currentLine.querySelector('.cursor');
             if (oldCursor) oldCursor.remove();
-
             currentLine.id = '';
             newLine.id = 'currentLine';
             currentLine = newLine;
             cursor = newCursor;
-
             setupLineTapEvents();
-
             displayArea.scrollTop = displayArea.scrollHeight;
         });
 
-        // === ツールバー機能 ===
-        function captureDisplayArea() {
-            finalizeAll();
 
-            const lines = document.querySelectorAll('.line');
-            if (lines.length === 0) return null;
-
-            const captureCanvas = document.createElement('canvas');
-            const padding = 20;
-            const lineHeight = 44;
-
-            let maxWidth = 0;
-            lines.forEach(line => {
-                const chars = line.querySelectorAll('.char-item, .space-char');
-                let width = padding * 2;
-                chars.forEach(char => {
-                    const rect = char.getBoundingClientRect();
-                    width += rect.width + 4;
-                });
-                if (width > maxWidth) maxWidth = width;
-            });
-
-            captureCanvas.width = Math.max(maxWidth, 400);
-            captureCanvas.height = lines.length * lineHeight + padding * 2;
-
-            const cctx = captureCanvas.getContext('2d');
-            cctx.fillStyle = '#ffffff';
-            cctx.fillRect(0, 0, captureCanvas.width, captureCanvas.height);
-
-            cctx.strokeStyle = '#eeeeee';
-            cctx.lineWidth = 1;
-
-            lines.forEach((line, lineIdx) => {
-                const y = padding + lineIdx * lineHeight;
-                cctx.beginPath();
-                cctx.moveTo(0, y + lineHeight - 4);
-                cctx.lineTo(captureCanvas.width, y + lineHeight - 4);
-                cctx.stroke();
-
-                let x = padding;
-                const chars = line.querySelectorAll('.char-item, .space-char');
-                chars.forEach((char) => {
-                    if (char.classList.contains('space-char')) {
-                        x += 16;
-                    } else {
-                        const img = char.querySelector('img');
-                        if (img && img.complete) {
-                            const w = parseInt(char.style.width) || 32;
-                            cctx.drawImage(img, x, y, w, 32);
-                            x += w + 4;
-                        }
-                    }
-                });
-            });
-
-            return captureCanvas;
-        }
-
-        document.getElementById('btnShareKeep').addEventListener('click', function() {
-            const captureCanvas = captureDisplayArea();
-            if (!captureCanvas) return;
-
-            captureCanvas.toBlob(function(blob) {
-                const file = new File([blob], 'handwriting.png', { type: 'image/png' });
-
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    navigator.share({
-                        files: [file],
-                        title: '走り書きメモ',
-                        text: '手書きメモを共有します'
-                    }).catch(function(err) {
-                        console.log('Share cancelled', err);
-                    });
-                } else {
-                    const url = captureCanvas.toDataURL('image/png');
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'handwriting.png';
-                    a.click();
-                    alert('共有機能が利用できないため、画像をダウンロードしました。Google Keepに手動でアップロードしてください。');
-                }
-            });
-        });
-
-        document.getElementById('btnSaveImage').addEventListener('click', function() {
-            const captureCanvas = captureDisplayArea();
-            if (!captureCanvas) return;
-
-            const url = captureCanvas.toDataURL('image/png');
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'handwriting_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.png';
-            a.click();
-        });
-
-        // 設定
-        const settingsOverlay = document.getElementById('settingsOverlay');
-        const settingAutoTime = document.getElementById('settingAutoTime');
-        const settingMonoWidth = document.getElementById('settingMonoWidth');
-        const settingPropMargin = document.getElementById('settingPropMargin');
-        const settingCharRes = document.getElementById('settingCharRes');
-        const autoTimeDisplay = document.getElementById('autoTimeDisplay');
-
-        document.getElementById('btnSettings').addEventListener('click', function() {
-            settingsOverlay.classList.add('show');
-        });
-
-        document.getElementById('btnCloseSettings').addEventListener('click', function() {
-            const newTime = parseInt(settingAutoTime.value, 10);
-            if (newTime >= 1 && newTime <= 30) {
-                AUTO_FINALIZE_DELAY = newTime * 1000;
-                autoTimeDisplay.textContent = newTime;
-            }
-            MONO_WIDTH = settingMonoWidth.checked;
-            const newMargin = parseInt(settingPropMargin.value, 10);
-            if (!isNaN(newMargin) && newMargin >= 0 && newMargin <= 10) {
-                PROP_MARGIN = newMargin;
-            }
-            const newCharRes = parseInt(settingCharRes.value, 10);
-            if (!isNaN(newCharRes) && newCharRes >= 32 && newCharRes <= 256) {
-                CHAR_RESOLUTION = newCharRes;
-            }
-            settingsOverlay.classList.remove('show');
-        });
-
-        settingsOverlay.addEventListener('click', function(e) {
-            if (e.target === settingsOverlay) {
-                settingsOverlay.classList.remove('show');
-            }
-        });
-
-        // フルスクリーン
-        document.getElementById('btnFullscreen').addEventListener('click', function() {
-            document.body.classList.add('fullscreen');
-        });
-
-        document.getElementById('btnExitFullscreen').addEventListener('click', function() {
-            document.body.classList.remove('fullscreen');
-        });
-
-        document.body.addEventListener('touchmove', function(e) {
-            if (document.body.classList.contains('fullscreen')) {
-                e.preventDefault();
-            }
-        }, { passive: false });
-
-        updateActiveState();
-
-        // === ボタンダブルタップ拡大防止 ===
-        document.querySelectorAll('.btn').forEach(function(btn) {
-            let lastTap = 0;
-            btn.addEventListener('touchend', function(e) {
-                const now = Date.now();
-                if (now - lastTap < 350) {
-                    e.preventDefault();
-                }
-                lastTap = now;
-            }, { passive: false });
-        });
-
-
-        // === 境界線のドラッグ調整 ＆ 入力エリアの動的サイズ計算（長方形化対応） ===
-        (function() {
-            const displayArea = document.getElementById('displayArea');
-            const inputArea = document.querySelector('.input-area');
-            
-            let displayHeight = window.innerHeight * 0.5;
-            displayArea.style.flex = 'none';
-            displayArea.style.height = displayHeight + 'px';
-
-            let isDragging = false;
-            let startY = 0;
-            let startHeight = 0;
-
-            function startResize(e) {
-                const rect = displayArea.getBoundingClientRect();
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                
-                if (rect.bottom - clientY <= 15) {
-                    isDragging = true;
-                    startY = clientY;
-                    startHeight = displayArea.offsetHeight;
-                    if (!e.touches) e.preventDefault();
-                }
-            }
-
-            function doResize(e) {
-                if (!isDragging) return;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                const deltaY = clientY - startY;
-                
-                let newHeight = startHeight + deltaY;
-                const minH = 100;
-                const maxH = window.innerHeight - 150;
-                newHeight = Math.max(minH, Math.min(maxH, newHeight));
-                
-                displayHeight = newHeight;
-                displayArea.style.height = displayHeight + 'px';
-                checkLayout(); 
-            }
-
-            function endResize() {
-                isDragging = false;
-            }
-
-            displayArea.addEventListener('mousedown', startResize);
-            window.addEventListener('mousemove', doResize);
-            window.addEventListener('mouseup', endResize);
-
-            displayArea.addEventListener('touchstart', startResize, { passive: true });
-            window.addEventListener('touchmove', function(e) {
-                if (isDragging) {
-                    e.preventDefault(); 
-                    doResize(e);
-                }
-            }, { passive: false });
-            window.addEventListener('touchend', endResize);
-
-
-            const PADDING = 10 * 2;   
-            const GAP = 8;            
-            const BTN_COL_W = 54;     
-            const BTN_COLS = 2;       
-            const CV_COUNT = 2;       
-            
-            const FIXED_W = BTN_COL_W * BTN_COLS + GAP * (BTN_COLS + CV_COUNT - 1) + PADDING;
-
-            function checkLayout() {
-                if (document.body.classList.contains('fullscreen')) {
-                    displayArea.style.height = 'auto';
-                    displayArea.style.flex = '1';
-                } else {
-                    displayArea.style.flex = 'none';
-                    displayArea.style.height = displayHeight + 'px';
-                }
-
-                const totalW = inputArea.offsetWidth;
-                const totalH = inputArea.clientHeight;
-
-                const availableW = totalW - FIXED_W;
-                let maxWForCanvas = Math.floor(availableW / CV_COUNT);
-                if (maxWForCanvas < 40) maxWForCanvas = 40; 
-
-                const maxHForCanvas = Math.max(40, totalH - PADDING);
-
-                let finalW = Math.min(maxWForCanvas, maxHForCanvas);
-                let finalH = finalW;
-
-                const requiredBtnH = 48 * 2 + GAP;
-
-                if (maxHForCanvas < requiredBtnH) {
-                    finalH = maxHForCanvas;
-                    finalW = maxWForCanvas;
-                } else {
-                    if (finalH === maxHForCanvas && finalW < maxWForCanvas) {
-                        finalW = maxWForCanvas;
-                    }
-                }
-
-                inputArea.style.setProperty('--cv-w', finalW + 'px');
-                inputArea.style.setProperty('--cv-h', finalH + 'px');
-            }
-
-            checkLayout();
-            const ro = new ResizeObserver(checkLayout);
-            ro.observe(inputArea);
-            window.addEventListener('resize', checkLayout);
-
-            document.getElementById('btnFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
-            document.getElementById('btnExitFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
-        })();
-// === displayArea タッチ＆マウスドラッグ統合制御 ===
+        // === 表示エリア（displayArea）のタッチ＆マウス選択統合制御 ===
         (function() {
             const zoomContainer = document.getElementById('zoomContainer');
             let currentScale = 1.0;
@@ -1433,8 +1058,7 @@ function moveCursorToNearestPosition(lineElement, tapX) {
             }
 
             function updateSelection(startEl, endEl) {
-                document.querySelectorAll('.char-item.selected, .space-char.selected')
-                    .forEach(el => el.classList.remove('selected'));
+                document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
                 if (!startEl || !endEl) return;
                 const all = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
                 const si = all.indexOf(startEl);
@@ -1446,42 +1070,29 @@ function moveCursorToNearestPosition(lineElement, tapX) {
             }
 
             function clearSelection() {
-                document.querySelectorAll('.char-item.selected, .space-char.selected')
-                    .forEach(el => el.classList.remove('selected'));
+                document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
                 cursor.classList.remove('hidden');
             }
 
-            function cancelLongPress() {
-                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-            }
-
-            function cancelMouseLongPress() {
-                if (mouseLongPressTimer) { clearTimeout(mouseLongPressTimer); mouseLongPressTimer = null; }
-            }
+            function cancelLongPress() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+            function cancelMouseLongPress() { if (mouseLongPressTimer) { clearTimeout(mouseLongPressTimer); mouseLongPressTimer = null; } }
 
             function moveCursorToPoint(x, y) {
                 const lines = Array.from(zoomContainer.querySelectorAll('.line'));
                 let targetLine = null;
-                
                 for (const line of lines) {
                     const r = line.getBoundingClientRect();
-                    if (y >= r.top && y <= r.bottom) {
-                        targetLine = line;
-                        break;
-                    }
+                    if (y >= r.top && y <= r.bottom) { targetLine = line; break; }
                 }
-                
                 if (targetLine && targetLine.querySelectorAll('.char-item, .space-char').length === 0) {
                     moveCursorToNearestPosition(targetLine, x);
                     return;
                 }
-
                 const els = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
                 if (els.length === 0) {
                     if (lines.length > 0) moveCursorToNearestPosition(lines[0], x);
                     return;
                 }
-                
                 let nearest = null, nearestDist = Infinity;
                 for (const el of els) {
                     const r = el.getBoundingClientRect();
@@ -1499,7 +1110,6 @@ function moveCursorToNearestPosition(lineElement, tapX) {
                     nearest.parentNode.insertBefore(cursor, nearest.nextSibling);
                 }
                 currentLine = cursor.parentNode;
-                
                 lines.forEach(l => l.id = '');
                 currentLine.id = 'currentLine';
             }
@@ -1507,10 +1117,7 @@ function moveCursorToNearestPosition(lineElement, tapX) {
             function forceEndMouseSelection() {
                 cancelMouseLongPress();
                 if (mode === 'mouse_selecting' || isMouseSelectionReady || selectStartEl) {
-                    mode = 'idle';
-                    isMouseSelectionReady = false;
-                    selectStartEl = null;
-                    selectEndEl = null;
+                    mode = 'idle'; isMouseSelectionReady = false; selectStartEl = null; selectEndEl = null;
                     return true; 
                 }
                 return false;
@@ -1519,146 +1126,78 @@ function moveCursorToNearestPosition(lineElement, tapX) {
             displayArea.addEventListener('mousedown', function(e) {
                 if (e.button !== 0) return;
                 if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
-
                 const startEl = charAtPoint(e.clientX, e.clientY);
                 if (startEl) {
-                    mouseStartX = e.clientX;
-                    mouseStartY = e.clientY;
-                    mouseDragged = false;
-                    isMouseSelectionReady = false; 
-                    selectStartEl = startEl;
-                    selectEndEl = startEl;
-
+                    mouseStartX = e.clientX; mouseStartY = e.clientY; mouseDragged = false; isMouseSelectionReady = false; 
+                    selectStartEl = startEl; selectEndEl = startEl;
                     cancelMouseLongPress();
                     mouseLongPressTimer = setTimeout(function() {
-                        isMouseSelectionReady = true;
-                        mode = 'mouse_selecting';
-                        clearSelection();
-                        selectStartEl.classList.add('selected');
-                        cursor.classList.add('hidden');
+                        isMouseSelectionReady = true; mode = 'mouse_selecting'; clearSelection();
+                        selectStartEl.classList.add('selected'); cursor.classList.add('hidden');
                     }, LONG_PRESS_MS);
                 }
             });
 
             window.addEventListener('mousemove', function(e) {
                 if (!selectStartEl) return;
-
-                const dx = e.clientX - mouseStartX;
-                const dy = e.clientY - mouseStartY;
+                const dx = e.clientX - mouseStartX; const dy = e.clientY - mouseStartY;
                 const moveDistance = Math.sqrt(dx * dx + dy * dy);
-
                 if (!isMouseSelectionReady && moveDistance > 8) {
-                    cancelMouseLongPress();
-                    isMouseSelectionReady = true;
-                    mode = 'mouse_selecting';
-                    clearSelection();
-                    selectStartEl.classList.add('selected');
-                    cursor.classList.add('hidden');
+                    cancelMouseLongPress(); isMouseSelectionReady = true; mode = 'mouse_selecting'; clearSelection();
+                    selectStartEl.classList.add('selected'); cursor.classList.add('hidden');
                 }
-
                 if (mode === 'mouse_selecting') {
                     mouseDragged = true; 
                     const el = charAtPoint(e.clientX, e.clientY);
-                    if (el && el !== selectEndEl) {
-                        selectEndEl = el;
-                        updateSelection(selectStartEl, selectEndEl);
-                    }
+                    if (el && el !== selectEndEl) { selectEndEl = el; updateSelection(selectStartEl, selectEndEl); }
                     e.preventDefault();
                 }
             }, { passive: false });
 
             window.addEventListener('mouseup', function(e) {
                 if (e.button !== 0) return;
-                
                 const wasSelecting = forceEndMouseSelection();
-                
-                if (wasSelecting && mouseDragged) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-
+                if (wasSelecting && mouseDragged) { e.preventDefault(); e.stopPropagation(); return; }
                 if (!mouseDragged && !wasSelecting && mouseStartX !== 0) {
                     if (charAtPoint(mouseStartX, mouseStartY) || e.target.closest('.line')) {
-                        clearSelection();
-                        moveCursorToPoint(mouseStartX, mouseStartY);
+                        clearSelection(); moveCursorToPoint(mouseStartX, mouseStartY);
                     }
                 }
-
-                mouseStartX = 0;
-                mouseStartY = 0;
-                mouseDragged = false;
+                mouseStartX = 0; mouseStartY = 0; mouseDragged = false;
             }, true); 
 
-            displayArea.addEventListener('dragstart', function(e) {
-                if (selectStartEl) {
-                    e.preventDefault();
-                }
-            });
-
-            window.addEventListener('blur', function() {
-                forceEndMouseSelection();
-                mouseDragged = false;
-            });
-            document.addEventListener('mouseleave', function() {
-                forceEndMouseSelection();
-                mouseDragged = false;
-            });
+            displayArea.addEventListener('dragstart', function(e) { if (selectStartEl) e.preventDefault(); });
+            window.addEventListener('blur', function() { forceEndMouseSelection(); mouseDragged = false; });
+            document.addEventListener('mouseleave', function() { forceEndMouseSelection(); mouseDragged = false; });
 
             displayArea.addEventListener('click', function(e) {
-                if (mouseDragged) {
-                    mouseDragged = false; 
-                    e.stopPropagation();
-                    e.preventDefault();
-                    return;
-                }
-
+                if (mouseDragged) { mouseDragged = false; e.stopPropagation(); e.preventDefault(); return; }
                 const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
-                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) {
-                    clearSelection();
-                    mode = 'idle';
-                }
+                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) { clearSelection(); mode = 'idle'; }
             }, true); 
 
             displayArea.addEventListener('touchstart', function(e) {
-                if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) {
-                    return;
-                }
-
+                if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) return;
                 if (e.touches.length === 1) {
                     const t = e.touches[0];
-                    touchStartX = t.clientX;
-                    touchStartY = t.clientY;
-                    
-                    scrollStartX = t.clientX;
-                    scrollStartY = t.clientY;
-                    scrollOriginLeft = displayArea.scrollLeft;
-                    scrollOriginTop  = displayArea.scrollTop;
-
-                    mode = 'longpress_pending';
-                    cancelLongPress();
-                    
+                    touchStartX = t.clientX; touchStartY = t.clientY;
+                    scrollStartX = t.clientX; scrollStartY = t.clientY;
+                    scrollOriginLeft = displayArea.scrollLeft; scrollOriginTop  = displayArea.scrollTop;
+                    mode = 'longpress_pending'; cancelLongPress();
                     longPressTimer = setTimeout(function() {
                         mode = 'selecting';
-                        selectStartEl = charAtPoint(touchStartX, touchStartY);
-                        selectEndEl = selectStartEl;
-                        clearSelection();
-                        if (selectStartEl) selectStartEl.classList.add('selected');
+                        selectStartEl = charAtPoint(touchStartX, touchStartY); selectEndEl = selectStartEl;
+                        clearSelection(); if (selectStartEl) selectStartEl.classList.add('selected');
                         cursor.classList.add('hidden');
                     }, LONG_PRESS_MS);
-
                 } else if (e.touches.length === 2) {
-                    cancelLongPress();
-                    mode = 'pinching';
+                    cancelLongPress(); mode = 'pinching';
                     const dist = getTouchDist(e.touches);
-                    pinchStartDist  = dist;
-                    pinchStartScale = currentScale;
+                    pinchStartDist  = dist; pinchStartScale = currentScale;
                     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                    scrollStartX = mx;
-                    scrollStartY = my;
-                    scrollOriginLeft = displayArea.scrollLeft;
-                    scrollOriginTop  = displayArea.scrollTop;
+                    scrollStartX = mx; scrollStartY = my;
+                    scrollOriginLeft = displayArea.scrollLeft; scrollOriginTop  = displayArea.scrollTop;
                     clearSelection();
                 }
                 if (mode !== 'idle' && mode !== 'mouse_selecting') e.preventDefault();
@@ -1667,136 +1206,189 @@ function moveCursorToNearestPosition(lineElement, tapX) {
             displayArea.addEventListener('touchmove', function(e) {
                 if (mode === 'idle' || mode === 'mouse_selecting') return;
                 e.preventDefault();
-
                 if (e.touches.length === 1) {
                     const t = e.touches[0];
-                    const dx = t.clientX - touchStartX;
-                    const dy = t.clientY - touchStartY;
+                    const dx = t.clientX - touchStartX; const dy = t.clientY - touchStartY;
                     const moved = Math.sqrt(dx*dx + dy*dy);
-
-                    if (mode === 'longpress_pending') {
-                        if (moved > 8) { 
-                            cancelLongPress(); 
-                            mode = 'scrolling_1finger'; 
-                        }
-                    }
-
+                    if (mode === 'longpress_pending' && moved > 8) { cancelLongPress(); mode = 'scrolling_1finger'; }
                     if (mode === 'scrolling_1finger') {
-                        const scrollDX = t.clientX - scrollStartX;
-                        const scrollDY = t.clientY - scrollStartY;
-                        displayArea.scrollLeft = scrollOriginLeft - scrollDX;
-                        displayArea.scrollTop  = scrollOriginTop - scrollDY;
+                        displayArea.scrollLeft = scrollOriginLeft - (t.clientX - scrollStartX);
+                        displayArea.scrollTop  = scrollOriginTop - (t.clientY - scrollStartY);
                     } else if (mode === 'selecting') {
                         const el = charAtPoint(t.clientX, t.clientY);
-                        if (el && el !== selectEndEl) {
-                            selectEndEl = el;
-                            updateSelection(selectStartEl, selectEndEl);
-                        }
+                        if (el && el !== selectEndEl) { selectEndEl = el; updateSelection(selectStartEl, selectEndEl); }
                     }
                 } else if (e.touches.length === 2) {
                     const dist = getTouchDist(e.touches);
                     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                    const pinchRatio = dist / pinchStartDist;
-                    const scrollDX   = mx - scrollStartX;
-                    const scrollDY   = my - scrollStartY;
-
-                    let newScale = pinchStartScale * pinchRatio;
+                    let newScale = pinchStartScale * (dist / pinchStartDist);
                     newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
                     currentScale = newScale;
                     zoomContainer.style.transform = 'scale(' + currentScale + ')';
-
-                    displayArea.scrollLeft = scrollOriginLeft - scrollDX;
-                    displayArea.scrollTop  = scrollOriginTop  - scrollDY;
+                    displayArea.scrollLeft = scrollOriginLeft - (mx - scrollStartX);
+                    displayArea.scrollTop  = scrollOriginTop  - (my - scrollStartY);
                 }
             }, { passive: false });
 
             displayArea.addEventListener('touchend', function(e) {
                 if (e.touches.length === 0) {
                     if (mode === 'longpress_pending') {
-                        cancelLongPress();
-                        moveCursorToPoint(touchStartX, touchStartY);
-                        clearSelection();
-                        cursor.classList.remove('hidden');
+                        cancelLongPress(); moveCursorToPoint(touchStartX, touchStartY);
+                        clearSelection(); cursor.classList.remove('hidden');
                     }
                     if (mode !== 'selecting') mode = 'idle';
                 }
             }, { passive: true });
         })();
 
+
         // === 画面右下ボタン ＆ キーボードショートカット完全同期統合ロジック ===
-        
-        // 実際のコピペ・切り取りのアクション処理を共通関数化
-        function executeCopyAction() {
-            finalizeAll();
-            copySelectedToClipboard();
-        }
+        function executeCopyAction() { finalizeAll(); copySelectedToClipboard(); }
+        function executeCutAction() { finalizeAll(); if (!copySelectedToClipboard()) return; getSelectedElements().forEach(el => el.remove()); }
+        function executePasteAction() { finalizeAll(); if (internalClipboard.length === 0) return; replaceSelectionWithCursor(); pasteFromClipboard(); }
 
-        function executeCutAction() {
-            finalizeAll();
-            if (!copySelectedToClipboard()) return;
-            getSelectedElements().forEach(el => el.remove());
-        }
-
-        function executePasteAction() {
-            finalizeAll();
-            if (internalClipboard.length === 0) return;
-            replaceSelectionWithCursor(); 
-            pasteFromClipboard();
-        }
-
-        // 1. 画面上のすべての「.btn」に対してクリック＆タップイベントを一元管理（競合を完全回避）
         document.querySelectorAll('.btn').forEach(function(btn) {
             let lastTap = 0;
-            
-            // モバイル端末用のタッチ終了イベント
             btn.addEventListener('touchend', function(e) {
                 const now = Date.now();
                 const isDoubleTap = (now - lastTap < 350);
                 lastTap = now;
+                if (isDoubleTap) e.preventDefault();
 
-                if (isDoubleTap) {
-                    e.preventDefault(); // ダブルタップによるブラウザ拡大のみを防止
-                }
-
-                // 右下ボタンのIDを判定して、それぞれのコピペ関数を最優先実行
-                if (btn.id === 'btnCopy') {
-                    e.preventDefault(); e.stopPropagation(); executeCopyAction();
-                } else if (btn.id === 'btnCut') {
-                    e.preventDefault(); e.stopPropagation(); executeCutAction();
-                } else if (btn.id === 'btnPaste') {
-                    e.preventDefault(); e.stopPropagation(); executePasteAction();
-                }
+                if (btn.id === 'btnCopy') { e.preventDefault(); e.stopPropagation(); executeCopyAction(); }
+                else if (btn.id === 'btnCut') { e.preventDefault(); e.stopPropagation(); executeCutAction(); }
+                else if (btn.id === 'btnPaste') { e.preventDefault(); e.stopPropagation(); executePasteAction(); }
             }, { passive: false });
 
-            // PCマウス用の通常のクリックイベント
             btn.addEventListener('click', function(e) {
-                if (btn.id === 'btnCopy') {
-                    e.preventDefault(); e.stopPropagation(); executeCopyAction();
-                } else if (btn.id === 'btnCut') {
-                    e.preventDefault(); e.stopPropagation(); executeCutAction();
-                } else if (btn.id === 'btnPaste') {
-                    e.preventDefault(); e.stopPropagation(); executePasteAction();
-                }
+                if (btn.id === 'btnCopy') { e.preventDefault(); e.stopPropagation(); executeCopyAction(); }
+                else if (btn.id === 'btnCut') { e.preventDefault(); e.stopPropagation(); executeCutAction(); }
+                else if (btn.id === 'btnPaste') { e.preventDefault(); e.stopPropagation(); executePasteAction(); }
             });
         });
 
-        // 2. キーボードショートカット（Ctrl + C / X / V）の同期
         window.addEventListener('keydown', function(e) {
             const isCtrl = e.ctrlKey || e.metaKey;
             if (!isCtrl) return;
-
             const key = e.key.toLowerCase();
+            if (key === 'c') { e.preventDefault(); executeCopyAction(); }
+            else if (key === 'x') { e.preventDefault(); executeCutAction(); }
+            else if (key === 'v') { e.preventDefault(); executePasteAction(); }
+        });
 
-            if (key === 'c') {
-                e.preventDefault();
-                executeCopyAction();
-            } else if (key === 'x') {
-                e.preventDefault();
-                executeCutAction();
-            } else if (key === 'v') {
-                e.preventDefault();
-                executePasteAction();
+
+        // === 設定画面の制御（その他の既存UIイベント群） ===
+        const btnSettings = document.getElementById('btnSettings');
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const btnCloseSettings = document.getElementById('btnCloseSettings');
+        const settingAutoTime = document.getElementById('settingAutoTime');
+        const autoTimeDisplay = document.getElementById('autoTimeDisplay');
+        const settingMonoWidth = document.getElementById('settingMonoWidth');
+        const settingPropMargin = document.getElementById('settingPropMargin');
+        const settingCharRes = document.getElementById('settingCharRes');
+
+        btnSettings.addEventListener('click', function() { settingsOverlay.classList.add('show'); });
+        btnCloseSettings.addEventListener('click', function() { settingsOverlay.classList.remove('show'); });
+        settingsOverlay.addEventListener('click', function(e) { if (e.target === settingsOverlay) settingsOverlay.classList.remove('show'); });
+
+        settingAutoTime.addEventListener('input', function() {
+            let val = parseInt(settingAutoTime.value);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 30) val = 30;
+            AUTO_FINALIZE_DELAY = val * 1000;
+            autoTimeDisplay.textContent = val;
+        });
+
+        settingMonoWidth.addEventListener('change', function() { MONO_WIDTH = settingMonoWidth.checked; });
+        settingPropMargin.addEventListener('input', function() {
+            let val = parseInt(settingPropMargin.value);
+            if (isNaN(val) || val < 0) val = 0;
+            PROP_MARGIN = val;
+        });
+        settingCharRes.addEventListener('input', function() {
+            let val = parseInt(settingCharRes.value);
+            if (isNaN(val) || val < 32) val = 32;
+            CHAR_RESOLUTION = val;
+        });
+
+        // 保存・共有・フルスクリーンの制御
+        document.getElementById('btnSaveImage').addEventListener('click', function() {
+            finalizeAll();
+            const originalCursor = document.querySelector('.cursor');
+            let cursorParent = null, cursorNextSibling = null;
+            if (originalCursor) {
+                cursorParent = originalCursor.parentNode;
+                cursorNextSibling = originalCursor.nextSibling;
+                originalCursor.remove();
+            }
+            const lines = document.querySelectorAll('#zoomContainer .line');
+            if (lines.length === 0) { alert('保存する文字がありません。'); return; }
+            let totalW = 0, totalH = 0;
+            lines.forEach(line => {
+                let lineW = 0;
+                line.querySelectorAll('.char-item, .space-char').forEach(el => { lineW += el.offsetWidth; });
+                if (lineW > totalW) totalW = lineW;
+                totalH += 40; 
+            });
+            if (totalW === 0) totalW = 100;
+            const canvas = document.createElement('canvas');
+            canvas.width = totalW + 40; canvas.height = totalH + 40;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            let currentY = 20;
+            let loadedImages = 0, totalImages = document.querySelectorAll('#zoomContainer .char-item img').length;
+
+            function drawAll() {
+                lines.forEach(line => {
+                    let currentX = 20;
+                    line.childNodes.forEach(node => {
+                        if (node.classList && node.classList.contains('char-item')) {
+                            const img = node.querySelector('img');
+                            const w = node.offsetWidth; const h = 32;
+                            ctx.drawImage(img, currentX, currentY + 4, w, h);
+                            currentX += w;
+                        } else if (node.classList && node.classList.contains('space-char')) {
+                            currentX += node.offsetWidth;
+                        }
+                    });
+                    currentY += 40;
+                });
+                if (originalCursor && cursorParent) { cursorParent.insertBefore(originalCursor, cursorNextSibling); }
+                const link = document.createElement('a');
+                link.download = '走り書きメモ_' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+                link.href = canvas.toDataURL('image/png'); link.click();
+            }
+
+            if (totalImages === 0) { drawAll(); } else {
+                document.querySelectorAll('#zoomContainer .char-item img').forEach(img => {
+                    if (img.complete) { loadedImages++; if (loadedImages === totalImages) drawAll(); }
+                    else { img.addEventListener('load', function() { loadedImages++; if (loadedImages === totalImages) drawAll(); }); }
+                });
             }
         });
+
+        document.getElementById('btnShareKeep').addEventListener('click', function() {
+            finalizeAll();
+            const lines = document.querySelectorAll('#zoomContainer .line');
+            if (lines.length === 0) { alert('共有する文字がありません。'); return; }
+            let text = "";
+            lines.forEach((line, index) => {
+                if (index > 0) text += "\n";
+                line.childNodes.forEach(node => {
+                    if (node.classList && node.classList.contains('char-item')) text += "■";
+                    else if (node.classList && node.classList.contains('space-char')) text += " ";
+                });
+            });
+            const url = "https://keep.google.com/#create?text=" + encodeURIComponent(text);
+            window.open(url, '_blank');
+        });
+
+        const btnFullscreen = document.getElementById('btnFullscreen');
+        const btnExitFullscreen = document.getElementById('btnExitFullscreen');
+        btnFullscreen.addEventListener('click', function() { document.body.classList.add('fullscreen'); });
+        btnExitFullscreen.addEventListener('click', function() { document.body.classList.remove('fullscreen'); });
+    </script>
+</body>
 </html>
+
