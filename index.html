@@ -1674,9 +1674,11 @@
                 }
             }, { passive: true });
         })();
-        // === キーボードイベント制御 ===
-        // === ここから追加：キーボードイベント制御（上下矢印修正版） ===
+        // === ここから追加：キーボードイベント制御（コピペ対応版） ===
         (function() {
+            // クリップボードの代わりにアプリ内部で要素を保持する用の一時ストレージ
+            let appClipboardData = [];
+
             // ヘルパー：選択ハイライトの更新（範囲指定）
             function updateSelectionRange(startEl, endEl) {
                 document.querySelectorAll('.char-item.selected, .space-char.selected')
@@ -1713,7 +1715,73 @@
                 let selectionActive = e.shiftKey;
                 const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
 
-                // 矢印キー、Backspace、Delete、Enter、Space、Tab、PageUp、PageDown 以外は確定処理を走らせる
+                // Ctrlキー（またはMacのCmdキー）との組み合わせ処理
+                if (e.ctrlKey || e.metaKey) {
+                    const key = e.key.toLowerCase();
+                    
+                    // --- コピー (Ctrl + C) ---
+                    if (key === 'c') {
+                        if (selectedEls.length > 0) {
+                            e.preventDefault();
+                            appClipboardData = selectedEls.map(el => {
+                                return {
+                                    type: el.classList.contains('char-item') ? 'char' : 'space',
+                                    src: el.querySelector('img') ? el.querySelector('img').src : null
+                                };
+                            });
+                        }
+                        return;
+                    }
+
+                    // --- 切り取り (Ctrl + X) ---
+                    if (key === 'x') {
+                        if (selectedEls.length > 0) {
+                            e.preventDefault();
+                            // まずコピー
+                            appClipboardData = selectedEls.map(el => {
+                                return {
+                                    type: el.classList.contains('char-item') ? 'char' : 'space',
+                                    src: el.querySelector('img') ? el.querySelector('img').src : null
+                                };
+                            });
+                            // 選択範囲を削除してカーソルを戻す
+                            replaceSelectionWithCursor();
+                        }
+                        return;
+                    }
+
+                    // --- 貼り付け (Ctrl + V) ---
+                    if (key === 'v') {
+                        if (appClipboardData.length > 0) {
+                            e.preventDefault();
+                            finalizeAll();
+                            
+                            // 範囲選択があれば先に置き換え消去
+                            if (selectedEls.length > 0) {
+                                replaceSelectionWithCursor();
+                            }
+
+                            // コピーされているデータを現在のカーソル位置に順番に挿入
+                            appClipboardData.forEach(data => {
+                                if (data.type === 'char') {
+                                    const charItem = document.createElement('div');
+                                    charItem.className = 'char-item';
+                                    const img = document.createElement('img');
+                                    img.src = data.src;
+                                    charItem.appendChild(img);
+                                    currentLine.insertBefore(charItem, cursor);
+                                } else if (data.type === 'space') {
+                                    const spaceChar = document.createElement('span');
+                                    spaceChar.className = 'space-char';
+                                    currentLine.insertBefore(spaceChar, cursor);
+                                }
+                            });
+                        }
+                        return;
+                    }
+                }
+
+                // 通常の1キー操作に対する確定処理
                 const targetKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete', 'Enter', ' ', 'Tab', 'PageUp', 'PageDown'];
                 if (targetKeys.includes(e.key)) {
                     finalizeAll();
@@ -1797,18 +1865,13 @@
                         e.preventDefault();
                         if (currentLineIndex > 0) {
                             const prevLine = allLines[currentLineIndex - 1];
-                            
-                            // カーソルが隠れている（範囲選択中）の場合は、選択範囲の先頭要素の座標を基準にする
                             let baseLeft = cursor.getBoundingClientRect().left;
                             if (selectedEls.length > 0) {
                                 baseLeft = selectedEls[0].getBoundingClientRect().left;
                             }
-
-                            // 選択範囲があれば、移動する前に先に解除する
                             if (!selectionActive && selectedEls.length > 0) {
                                 clearSelectionOnly();
                             }
-
                             moveCursorToNearestPosition(prevLine, baseLeft);
                         }
                         break;
@@ -1817,18 +1880,13 @@
                         e.preventDefault();
                         if (currentLineIndex < allLines.length - 1) {
                             const nextLine = allLines[currentLineIndex + 1];
-                            
-                            // カーソルが隠れている（範囲選択中）の場合は、選択範囲の末尾要素の座標を基準にする
                             let baseLeft = cursor.getBoundingClientRect().left;
                             if (selectedEls.length > 0) {
                                 baseLeft = selectedEls[selectedEls.length - 1].getBoundingClientRect().right;
                             }
-
-                            // 選択範囲があれば、移動する前に先に解除する
                             if (!selectionActive && selectedEls.length > 0) {
                                 clearSelectionOnly();
                             }
-
                             moveCursorToNearestPosition(nextLine, baseLeft);
                         }
                         break;
@@ -1899,7 +1957,7 @@
                 }
             });
         })();
-        // === ここまで追加：キーボードイベント制御（上下矢印修正版） ===
+        // === ここまで追加：キーボードイベント制御（コピペ対応版） ===
     </script>
 </body>
 </html>
