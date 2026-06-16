@@ -963,18 +963,36 @@
         });
 
         // === ボタン ===
-        document.getElementById('btnBackspace').addEventListener('click', function() {
-            finalizeAll();
+		let _backspaceSnapshot = [];
+		let _spaceSnapshot = [];
+		let _enterSnapshot = [];
 
-            const event = new KeyboardEvent('keydown', {
-                key: 'Backspace',
-                bubbles: true,
-                cancelable: true
-            });
+		document.getElementById('btnBackspace').addEventListener('pointerdown', function() {
+			_backspaceSnapshot = getSelectedElements().slice();
+		});
 
-            window.dispatchEvent(event);
-        });
+		document.getElementById('btnBackspace').addEventListener('click', function() {
+			finalizeAll();
 
+			if (_backspaceSnapshot.length > 0) {
+				_backspaceSnapshot.forEach(el => {
+					if (document.contains(el)) el.classList.add('selected');
+				});
+				replaceSelectionWithCursor();
+				_backspaceSnapshot = [];
+				return;
+			}
+
+			_backspaceSnapshot = [];
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'Backspace',
+				bubbles: true,
+				cancelable: true
+			});
+
+			window.dispatchEvent(event);
+		});
         function replaceSelectionWithCursor() {
             const sel = getSelectedElements();
             if (sel.length === 0) return false;
@@ -1124,53 +1142,80 @@
             pasteFromClipboard();
         });
 
-        document.getElementById('btnSpace').addEventListener('click', function() {
-            finalizeAll();
-            replaceSelectionWithCursor();
-            const space = document.createElement('span');
-            space.className = 'space-char';
-            currentLine.insertBefore(space, cursor);
-        });
+		document.getElementById('btnSpace').addEventListener('pointerdown', function() {
+			_spaceSnapshot = getSelectedElements().slice();
+		});
+		document.getElementById('btnSpace').addEventListener('click', function() {
+			finalizeAll();
 
-        document.getElementById('btnEnter').addEventListener('click', function() {
-            finalizeAll();
-            replaceSelectionWithCursor();
+			if (_spaceSnapshot.length > 0) {
+				_spaceSnapshot.forEach(el => {
+					if (document.contains(el)) {
+						el.classList.add('selected');
+					}
+				});
+			}
 
-            const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
-            const allChildren = Array.from(currentLine.children);
+			replaceSelectionWithCursor();
 
-            const elementsToMove = [];
-            for (let i = cursorIndex + 1; i < allChildren.length; i++) {
-                elementsToMove.push(allChildren[i]);
-            }
+			const space = document.createElement('span');
+			space.className = 'space-char';
+			currentLine.insertBefore(space, cursor);
 
-            const newLine = document.createElement('div');
-            newLine.className = 'line';
+			_spaceSnapshot = [];
+		});
 
-            const newCursor = document.createElement('span');
-            newCursor.className = 'cursor';
-            newCursor.id = 'cursor';
-            newLine.appendChild(newCursor);
+		document.getElementById('btnEnter').addEventListener('pointerdown', function() {
+			_enterSnapshot = getSelectedElements().slice();
+		});
 
-            elementsToMove.forEach(function(el) {
-                newLine.appendChild(el);
-            });
+		document.getElementById('btnEnter').addEventListener('click', function() {
+			finalizeAll();
 
-            currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+			if (_enterSnapshot.length > 0) {
+				_enterSnapshot.forEach(el => {
+					if (document.contains(el)) {
+						el.classList.add('selected');
+					}
+				});
+			}
 
-            const oldCursor = currentLine.querySelector('.cursor');
-            if (oldCursor) oldCursor.remove();
+			replaceSelectionWithCursor();
 
-            currentLine.id = '';
-            newLine.id = 'currentLine';
-            currentLine = newLine;
-            cursor = newCursor;
+			const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+			const allChildren = Array.from(currentLine.children);
 
-            setupLineTapEvents();
+			const elementsToMove = [];
+			for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+				elementsToMove.push(allChildren[i]);
+			}
 
-            displayArea.scrollTop = displayArea.scrollHeight;
-        });
+			const newLine = document.createElement('div');
+			newLine.className = 'line';
 
+			const newCursor = document.createElement('span');
+			newCursor.className = 'cursor';
+			newCursor.id = 'cursor';
+			newLine.appendChild(newCursor);
+
+			elementsToMove.forEach(el => newLine.appendChild(el));
+
+			currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+
+			const oldCursor = currentLine.querySelector('.cursor');
+			if (oldCursor) oldCursor.remove();
+
+			currentLine.id = '';
+			newLine.id = 'currentLine';
+			currentLine = newLine;
+			cursor = newCursor;
+
+			setupLineTapEvents();
+
+			displayArea.scrollTop = displayArea.scrollHeight;
+
+			_enterSnapshot = [];
+		});
         // === ツールバー機能 ===
         function captureDisplayArea() {
             finalizeAll();
