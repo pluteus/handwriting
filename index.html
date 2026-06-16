@@ -1631,12 +1631,8 @@
             });
         })();
         // === キーボードイベント制御 ===
+        // === ここから追加：キーボードイベント制御（上下矢印修正版） ===
         (function() {
-            // ヘルパー：指定した要素が選択されているかどうか
-            function isSelected(el) {
-                return el.classList.contains('selected');
-            }
-
             // ヘルパー：選択ハイライトの更新（範囲指定）
             function updateSelectionRange(startEl, endEl) {
                 document.querySelectorAll('.char-item.selected, .space-char.selected')
@@ -1649,6 +1645,13 @@
                 const lo = Math.min(si, ei), hi = Math.max(si, ei);
                 for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
                 cursor.classList.add('hidden');
+            }
+
+            // ヘルパー：選択を完全に解除してカーソルを可視化する
+            function clearSelectionOnly() {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                cursor.classList.remove('hidden');
             }
 
             window.addEventListener('keydown', function(e) {
@@ -1666,66 +1669,83 @@
                 let selectionActive = e.shiftKey;
                 const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
 
-                // 事前に確定処理を走らせる
-                finalizeAll();
+                // 矢印キー、Backspace、Delete、Enter、Space、Tab、PageUp、PageDown 以外は確定処理を走らせる
+                const targetKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete', 'Enter', ' ', 'Tab', 'PageUp', 'PageDown'];
+                if (targetKeys.includes(e.key)) {
+                    finalizeAll();
+                }
 
                 switch (e.key) {
                     case 'ArrowLeft':
                         e.preventDefault();
-                        if (cursorIndex > 0) {
-                            const prevEl = children[cursorIndex - 1];
-                            if (selectionActive) {
-                                // 選択開始要素の決定
+                        if (selectionActive) {
+                            if (cursorIndex > 0) {
+                                const prevEl = children[cursorIndex - 1];
                                 let startEl = selectedEls.length > 0 ? (selectedEls[0].classList.contains('select-start') ? selectedEls[0] : selectedEls[selectedEls.length - 1]) : prevEl;
                                 if (selectedEls.length === 0) prevEl.classList.add('select-start');
                                 currentLine.insertBefore(cursor, prevEl);
                                 updateSelectionRange(startEl, prevEl);
-                            } else {
-                                if (selectedEls.length > 0) {
-                                    // 選択解除して選択範囲の左端に移動
-                                    currentLine.insertBefore(cursor, selectedEls[0]);
-                                    replaceSelectionWithCursor();
-                                } else {
-                                    currentLine.insertBefore(cursor, prevEl);
-                                }
+                            } else if (currentLineIndex > 0) {
+                                const prevLine = allLines[currentLineIndex - 1];
+                                prevLine.appendChild(cursor);
+                                currentLine.id = '';
+                                prevLine.id = 'currentLine';
+                                currentLine = prevLine;
                             }
-                        } else if (currentLineIndex > 0) {
-                            // 上の行の末尾へ移動
-                            const prevLine = allLines[currentLineIndex - 1];
-                            prevLine.appendChild(cursor);
-                            currentLine.id = '';
-                            prevLine.id = 'currentLine';
-                            currentLine = prevLine;
-                            if (!selectionActive) replaceSelectionWithCursor();
+                        } else {
+                            if (selectedEls.length > 0) {
+                                const targetLine = selectedEls[0].parentNode;
+                                targetLine.insertBefore(cursor, selectedEls[0]);
+                                currentLine.id = '';
+                                targetLine.id = 'currentLine';
+                                currentLine = targetLine;
+                                clearSelectionOnly();
+                            } else if (cursorIndex > 0) {
+                                currentLine.insertBefore(cursor, children[cursorIndex - 1]);
+                            } else if (currentLineIndex > 0) {
+                                const prevLine = allLines[currentLineIndex - 1];
+                                prevLine.appendChild(cursor);
+                                currentLine.id = '';
+                                prevLine.id = 'currentLine';
+                                currentLine = prevLine;
+                            }
                         }
                         break;
 
                     case 'ArrowRight':
                         e.preventDefault();
-                        if (cursorIndex < children.length - 1) {
-                            const nextEl = children[cursorIndex + 1];
-                            if (selectionActive) {
+                        if (selectionActive) {
+                            if (cursorIndex < children.length - 1) {
+                                const nextEl = children[cursorIndex + 1];
                                 let startEl = selectedEls.length > 0 ? (selectedEls[0].classList.contains('select-start') ? selectedEls[0] : selectedEls[0]) : nextEl;
                                 if (selectedEls.length === 0) nextEl.classList.add('select-start');
                                 currentLine.insertBefore(cursor, nextEl.nextSibling);
                                 updateSelectionRange(startEl, nextEl);
-                            } else {
-                                if (selectedEls.length > 0) {
-                                    // 選択解除して選択範囲の右端に移動
-                                    currentLine.insertBefore(cursor, selectedEls[selectedEls.length - 1].nextSibling);
-                                    replaceSelectionWithCursor();
-                                } else {
-                                    currentLine.insertBefore(cursor, nextEl.nextSibling);
-                                }
+                            } else if (currentLineIndex < allLines.length - 1) {
+                                const nextLine = allLines[currentLineIndex + 1];
+                                nextLine.insertBefore(cursor, nextLine.firstChild);
+                                currentLine.id = '';
+                                nextLine.id = 'currentLine';
+                                currentLine = nextLine;
                             }
-                        } else if (currentLineIndex < allLines.length - 1) {
-                            // 下の行の先頭へ移動
-                            const nextLine = allLines[currentLineIndex + 1];
-                            nextLine.insertBefore(cursor, nextLine.firstChild);
-                            currentLine.id = '';
-                            nextLine.id = 'currentLine';
-                            currentLine = nextLine;
-                            if (!selectionActive) replaceSelectionWithCursor();
+                        } else {
+                            if (selectedEls.length > 0) {
+                                const lastSelected = selectedEls[selectedEls.length - 1];
+                                const targetLine = lastSelected.parentNode;
+                                targetLine.insertBefore(cursor, lastSelected.nextSibling);
+                                currentLine.id = '';
+                                targetLine.id = 'currentLine';
+                                currentLine = targetLine;
+                                clearSelectionOnly();
+                            } else if (cursorIndex < children.length - 1) {
+                                currentLine.insertBefore(cursor, children[cursorIndex + 1].nextSibling);
+                            } else if (currentLineIndex < allLines.length - 1) {
+                                const nextLine = allLines[currentLineIndex + 1];
+                                nextLine.insertBefore(cursor, nextLine.firstChild);
+                                currentLine.id = '';
+                                nextLine.id = 'currentLine';
+                                currentLine = nextLine;
+                            }
                         }
                         break;
 
@@ -1733,10 +1753,19 @@
                         e.preventDefault();
                         if (currentLineIndex > 0) {
                             const prevLine = allLines[currentLineIndex - 1];
-                            // 現在のX位置に一番近い要素を探してカーソルを移動
-                            const cursorRect = cursor.getBoundingClientRect();
-                            moveCursorToNearestPosition(prevLine, cursorRect.left);
-                            if (!selectionActive) replaceSelectionWithCursor();
+                            
+                            // カーソルが隠れている（範囲選択中）の場合は、選択範囲の先頭要素の座標を基準にする
+                            let baseLeft = cursor.getBoundingClientRect().left;
+                            if (selectedEls.length > 0) {
+                                baseLeft = selectedEls[0].getBoundingClientRect().left;
+                            }
+
+                            // 選択範囲があれば、移動する前に先に解除する
+                            if (!selectionActive && selectedEls.length > 0) {
+                                clearSelectionOnly();
+                            }
+
+                            moveCursorToNearestPosition(prevLine, baseLeft);
                         }
                         break;
 
@@ -1744,9 +1773,19 @@
                         e.preventDefault();
                         if (currentLineIndex < allLines.length - 1) {
                             const nextLine = allLines[currentLineIndex + 1];
-                            const cursorRect = cursor.getBoundingClientRect();
-                            moveCursorToNearestPosition(nextLine, cursorRect.left);
-                            if (!selectionActive) replaceSelectionWithCursor();
+                            
+                            // カーソルが隠れている（範囲選択中）の場合は、選択範囲の末尾要素の座標を基準にする
+                            let baseLeft = cursor.getBoundingClientRect().left;
+                            if (selectedEls.length > 0) {
+                                baseLeft = selectedEls[selectedEls.length - 1].getBoundingClientRect().right;
+                            }
+
+                            // 選択範囲があれば、移動する前に先に解除する
+                            if (!selectionActive && selectedEls.length > 0) {
+                                clearSelectionOnly();
+                            }
+
+                            moveCursorToNearestPosition(nextLine, baseLeft);
                         }
                         break;
 
@@ -1757,14 +1796,12 @@
                         } else if (cursorIndex > 0) {
                             children[cursorIndex - 1].remove();
                         } else if (currentLineIndex > 0) {
-                            // 上の行と結合
                             const prevLine = allLines[currentLineIndex - 1];
                             const elementsToMove = children.filter(el => el !== cursor);
                             elementsToMove.forEach(el => prevLine.appendChild(el));
                             currentLine.remove();
                             currentLine = prevLine;
                             currentLine.id = 'currentLine';
-                            // カーソル位置を再取得するために位置を調整
                             setupLineTapEvents();
                         }
                         break;
@@ -1776,7 +1813,6 @@
                         } else if (cursorIndex < children.length - 1) {
                             children[cursorIndex + 1].remove();
                         } else if (currentLineIndex < allLines.length - 1) {
-                            // 下の行を結合
                             const nextLine = allLines[currentLineIndex + 1];
                             const nextChildren = Array.from(nextLine.children).filter(el => el.id !== 'cursor');
                             nextChildren.forEach(el => currentLine.appendChild(el));
@@ -1787,22 +1823,19 @@
 
                     case 'Enter':
                         e.preventDefault();
-                        replaceSelectionWithCursor();
-                        // 既存の改行ロジック（Enterボタン）を実行
+                        if (selectedEls.length > 0) replaceSelectionWithCursor();
                         document.getElementById('btnEnter').click();
                         break;
 
                     case ' ':
                         e.preventDefault();
-                        replaceSelectionWithCursor();
-                        // 既存の空白ロジック（空白ボタン）を実行
+                        if (selectedEls.length > 0) replaceSelectionWithCursor();
                         document.getElementById('btnSpace').click();
                         break;
 
                     case 'Tab':
                         e.preventDefault();
-                        replaceSelectionWithCursor();
-                        // 4つの空白（space-char）を挿入
+                        if (selectedEls.length > 0) replaceSelectionWithCursor();
                         for (let i = 0; i < 4; i++) {
                             const space = document.createElement('span');
                             space.className = 'space-char';
@@ -1822,6 +1855,7 @@
                 }
             });
         })();
+        // === ここまで追加：キーボードイベント制御（上下矢印修正版） ===
     </script>
 </body>
 </html>
