@@ -965,18 +965,14 @@
         // === ボタン ===
         document.getElementById('btnBackspace').addEventListener('click', function() {
             finalizeAll();
-            const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
-            if (selected.length > 0) {
-                selected.forEach(el => el.remove());
-            } else {
-                const chars = currentLine.querySelectorAll('.char-item, .space-char');
-                if (chars.length > 0) {
-                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
-                    if (cursorIndex > 0) {
-                        currentLine.children[cursorIndex - 1].remove();
-                    }
-                }
-            }
+
+            const event = new KeyboardEvent('keydown', {
+                key: 'Backspace',
+                bubbles: true,
+                cancelable: true
+            });
+
+            window.dispatchEvent(event);
         });
 
         function replaceSelectionWithCursor() {
@@ -1020,21 +1016,29 @@
             const sel = getSelectedElements();
             if (sel.length === 0) return false;
 
+            const allLines = Array.from(document.querySelectorAll('.line'));
             const groups = [];
             let currentGroup = [];
-            let prevLine = null;
+            let prevLineIndex = -1;
 
             for (const el of sel) {
-                const line = el.parentNode;
-                if (prevLine && line !== prevLine) {
+                const lineIndex = allLines.indexOf(el.parentNode);
+
+                if (prevLineIndex >= 0 && lineIndex !== prevLineIndex) {
                     groups.push(currentGroup);
+
+                    for (let i = prevLineIndex + 1; i < lineIndex; i++) {
+                        groups.push([]); // 空行保持
+                    }
+
                     currentGroup = [];
                 }
-                currentGroup.push(cloneCharEl(el));
-                prevLine = line;
-            }
-            if (currentGroup.length > 0) groups.push(currentGroup);
 
+                currentGroup.push(cloneCharEl(el));
+                prevLineIndex = lineIndex;
+            }
+
+            groups.push(currentGroup);
             internalClipboard = groups;
             return true;
         }
@@ -1940,7 +1944,14 @@
 
                     case 'ArrowUp':
                         e.preventDefault();
-                        if (currentLineIndex > 0) {
+                        if (selectionActive) {
+                            const allChars = Array.from(document.querySelectorAll('.char-item, .space-char'));
+                            const curPos = allChars.findIndex(el => el.parentNode === currentLine);
+                            if (curPos > 0) {
+                                const target = allChars[curPos - 1];
+                                updateSelectionRange(selectedEls[0] || target, target);
+                            }
+                        } else if (currentLineIndex > 0) {
                             const prevLine = allLines[currentLineIndex - 1];
                             let baseLeft = cursor.getBoundingClientRect().left;
                             if (selectedEls.length > 0) {
@@ -1955,7 +1966,14 @@
 
                     case 'ArrowDown':
                         e.preventDefault();
-                        if (currentLineIndex < allLines.length - 1) {
+                        if (selectionActive) {
+                            const allChars = Array.from(document.querySelectorAll('.char-item, .space-char'));
+                            const curPos = allChars.findIndex(el => el.parentNode === currentLine);
+                            if (curPos >= 0 && curPos < allChars.length - 1) {
+                                const target = allChars[curPos + 1];
+                                updateSelectionRange(selectedEls[0] || target, target);
+                            }
+                        } else if (currentLineIndex < allLines.length - 1) {
                             const nextLine = allLines[currentLineIndex + 1];
                             let baseLeft = cursor.getBoundingClientRect().left;
                             if (selectedEls.length > 0) {
@@ -1976,9 +1994,19 @@
                             children[cursorIndex - 1].remove();
                         } else if (currentLineIndex > 0) {
                             const prevLine = allLines[currentLineIndex - 1];
+
+                            const joinCursor = document.createElement('span');
+                            joinCursor.className = 'cursor';
+                            joinCursor.id = 'cursor';
+
+                            prevLine.appendChild(joinCursor);
+
                             const elementsToMove = children.filter(el => el !== cursor);
-                            elementsToMove.forEach(el => prevLine.appendChild(el));
+                            elementsToMove.forEach(el => prevLine.insertBefore(el, joinCursor.nextSibling));
+
                             currentLine.remove();
+
+                            cursor = joinCursor;
                             currentLine = prevLine;
                             currentLine.id = 'currentLine';
                             setupLineTapEvents();
