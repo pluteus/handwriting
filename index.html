@@ -1754,93 +1754,84 @@
             }, { passive: true });
         })();
         // === ここから追加：キーボードイベント制御（コピペ対応版） ===
-        (function() {
-            // クリップボードの代わりにアプリ内部で要素を保持する用の一時ストレージ
-            let appClipboardData = [];
+        // === 【完全版】画面右下ボタンのコピペ・切り取り連動制御（強制上書き） ===
+            function initRightBottomButtons() {
+                // 1. 画面内のすべてのボタンから、見た目の文字やid、関数名でターゲットを徹底捜索
+                const allButtons = Array.from(document.querySelectorAll('button, input[type="button"], div.btn'));
+                
+                let btnCopy = null;
+                let btnCut = null;
+                let btnPaste = null;
 
-            // ヘルパー：選択ハイライトの更新（範囲指定）
-            function updateSelectionRange(startEl, endEl) {
-                document.querySelectorAll('.char-item.selected, .space-char.selected')
-                    .forEach(el => el.classList.remove('selected'));
-                if (!startEl || !endEl) return;
-                const all = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
-                const si = all.indexOf(startEl);
-                const ei = all.indexOf(endEl);
-                if (si < 0 || ei < 0) return;
-                const lo = Math.min(si, ei), hi = Math.max(si, ei);
-                for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
-                cursor.classList.add('hidden');
-            }
+                allButtons.forEach(btn => {
+                    const text = (btn.innerText || btn.value || btn.textContent || '').trim();
+                    const id = (btn.id || '').toLowerCase();
+                    const onclickStr = btn.getAttribute('onclick') || '';
 
-            // ヘルパー：選択を完全に解除してカーソルを可視化する
-            function clearSelectionOnly() {
-                document.querySelectorAll('.char-item.selected, .space-char.selected')
-                    .forEach(el => el.classList.remove('selected'));
-                cursor.classList.remove('hidden');
-            }
+                    // コピーボタンの特定
+                    if (text.includes('コピー') || id.includes('copy') || onclickStr.includes('copy')) {
+                        btnCopy = btn;
+                    }
+                    // 切り取りボタンの特定
+                    if (text.includes('切り取り') || text.includes('カット') || id.includes('cut') || onclickStr.includes('cut')) {
+                        btnCut = btn;
+                    }
+                    // 貼り付けボタンの特定
+                    if (text.includes('貼り付け') || text.includes('ペースト') || id.includes('paste') || onclickStr.includes('paste')) {
+                        btnPaste = btn;
+                    }
+                });
 
-            window.addEventListener('keydown', function(e) {
-                // 入力フォーム等にフォーカスがある場合はスキップ（設定画面など）
-                if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
-                    return;
+                // 2. 既存の古いインラインイベント(onclick="...")が邪魔しないように無効化し、新ロジックを最優先で注入
+                if (btnCopy) {
+                    btnCopy.onclick = null; // 既存のonclickをクリア
+                    btnCopy.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        finalizeAll(); 
+                        const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
+                        if (selectedEls.length > 0) {
+                            appClipboardData = selectedEls.map(el => {
+                                return {
+                                    type: el.classList.contains('char-item') ? 'char' : 'space',
+                                    src: el.querySelector('img') ? el.querySelector('img').src : null
+                                };
+                            });
+                        }
+                    }, true);
                 }
 
-                const children = Array.from(currentLine.children);
-                const cursorIndex = children.indexOf(cursor);
-                const allLines = Array.from(document.querySelectorAll('.line'));
-                const currentLineIndex = allLines.indexOf(currentLine);
-
-                // 範囲選択用の基準要素
-                let selectionActive = e.shiftKey;
-                const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
-
-                // Ctrlキー（またはMacのCmdキー）との組み合わせ処理
-                if (e.ctrlKey || e.metaKey) {
-                    const key = e.key.toLowerCase();
-                    
-                    // --- コピー (Ctrl + C) ---
-                    if (key === 'c') {
+                if (btnCut) {
+                    btnCut.onclick = null; // 既存のonclickをクリア
+                    btnCut.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        finalizeAll();
+                        const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
                         if (selectedEls.length > 0) {
-                            e.preventDefault();
                             appClipboardData = selectedEls.map(el => {
                                 return {
                                     type: el.classList.contains('char-item') ? 'char' : 'space',
                                     src: el.querySelector('img') ? el.querySelector('img').src : null
                                 };
                             });
+                            replaceSelectionWithCursor(); // 選択範囲を削除してカーソルを戻す
                         }
-                        return;
-                    }
+                    }, true);
+                }
 
-                    // --- 切り取り (Ctrl + X) ---
-                    if (key === 'x') {
-                        if (selectedEls.length > 0) {
-                            e.preventDefault();
-                            // まずコピー
-                            appClipboardData = selectedEls.map(el => {
-                                return {
-                                    type: el.classList.contains('char-item') ? 'char' : 'space',
-                                    src: el.querySelector('img') ? el.querySelector('img').src : null
-                                };
-                            });
-                            // 選択範囲を削除してカーソルを戻す
-                            replaceSelectionWithCursor();
-                        }
-                        return;
-                    }
+                if (btnPaste) {
+                    btnPaste.onclick = null; // 既存のonclickをクリア
+                    btnPaste.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        finalizeAll();
+                        const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
 
-                    // --- 貼り付け (Ctrl + V) ---
-                    if (key === 'v') {
                         if (appClipboardData.length > 0) {
-                            e.preventDefault();
-                            finalizeAll();
-                            
-                            // 範囲選択があれば先に置き換え消去
                             if (selectedEls.length > 0) {
-                                replaceSelectionWithCursor();
+                                replaceSelectionWithCursor(); // 範囲選択があれば先に消去
                             }
-
-                            // コピーされているデータを現在のカーソル位置に順番に挿入
                             appClipboardData.forEach(data => {
                                 if (data.type === 'char') {
                                     const charItem = document.createElement('div');
@@ -1856,262 +1847,13 @@
                                 }
                             });
                         }
-                        return;
-                    }
+                    }, true);
                 }
-
-                // 通常の1キー操作に対する確定処理
-                const targetKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete', 'Enter', ' ', 'Tab', 'PageUp', 'PageDown'];
-                if (targetKeys.includes(e.key)) {
-                    finalizeAll();
-                }
-
-                switch (e.key) {
-                    case 'ArrowLeft':
-                        e.preventDefault();
-                        if (selectionActive) {
-                            if (cursorIndex > 0) {
-                                const prevEl = children[cursorIndex - 1];
-                                let startEl = selectedEls.length > 0 ? (selectedEls[0].classList.contains('select-start') ? selectedEls[0] : selectedEls[selectedEls.length - 1]) : prevEl;
-                                if (selectedEls.length === 0) prevEl.classList.add('select-start');
-                                currentLine.insertBefore(cursor, prevEl);
-                                updateSelectionRange(startEl, prevEl);
-                            } else if (currentLineIndex > 0) {
-                                const prevLine = allLines[currentLineIndex - 1];
-                                prevLine.appendChild(cursor);
-                                currentLine.id = '';
-                                prevLine.id = 'currentLine';
-                                currentLine = prevLine;
-                            }
-                        } else {
-                            if (selectedEls.length > 0) {
-                                const targetLine = selectedEls[0].parentNode;
-                                targetLine.insertBefore(cursor, selectedEls[0]);
-                                currentLine.id = '';
-                                targetLine.id = 'currentLine';
-                                currentLine = targetLine;
-                                clearSelectionOnly();
-                            } else if (cursorIndex > 0) {
-                                currentLine.insertBefore(cursor, children[cursorIndex - 1]);
-                            } else if (currentLineIndex > 0) {
-                                const prevLine = allLines[currentLineIndex - 1];
-                                prevLine.appendChild(cursor);
-                                currentLine.id = '';
-                                prevLine.id = 'currentLine';
-                                currentLine = prevLine;
-                            }
-                        }
-                        break;
-
-                    case 'ArrowRight':
-                        e.preventDefault();
-                        if (selectionActive) {
-                            if (cursorIndex < children.length - 1) {
-                                const nextEl = children[cursorIndex + 1];
-                                let startEl = selectedEls.length > 0 ? (selectedEls[0].classList.contains('select-start') ? selectedEls[0] : selectedEls[0]) : nextEl;
-                                if (selectedEls.length === 0) nextEl.classList.add('select-start');
-                                currentLine.insertBefore(cursor, nextEl.nextSibling);
-                                updateSelectionRange(startEl, nextEl);
-                            } else if (currentLineIndex < allLines.length - 1) {
-                                const nextLine = allLines[currentLineIndex + 1];
-                                nextLine.insertBefore(cursor, nextLine.firstChild);
-                                currentLine.id = '';
-                                nextLine.id = 'currentLine';
-                                currentLine = nextLine;
-                            }
-                        } else {
-                            if (selectedEls.length > 0) {
-                                const lastSelected = selectedEls[selectedEls.length - 1];
-                                const targetLine = lastSelected.parentNode;
-                                targetLine.insertBefore(cursor, lastSelected.nextSibling);
-                                currentLine.id = '';
-                                targetLine.id = 'currentLine';
-                                currentLine = targetLine;
-                                clearSelectionOnly();
-                            } else if (cursorIndex < children.length - 1) {
-                                currentLine.insertBefore(cursor, children[cursorIndex + 1].nextSibling);
-                            } else if (currentLineIndex < allLines.length - 1) {
-                                const nextLine = allLines[currentLineIndex + 1];
-                                nextLine.insertBefore(cursor, nextLine.firstChild);
-                                currentLine.id = '';
-                                nextLine.id = 'currentLine';
-                                currentLine = nextLine;
-                            }
-                        }
-                        break;
-
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        if (currentLineIndex > 0) {
-                            const prevLine = allLines[currentLineIndex - 1];
-                            let baseLeft = cursor.getBoundingClientRect().left;
-                            if (selectedEls.length > 0) {
-                                baseLeft = selectedEls[0].getBoundingClientRect().left;
-                            }
-                            if (!selectionActive && selectedEls.length > 0) {
-                                clearSelectionOnly();
-                            }
-                            moveCursorToNearestPosition(prevLine, baseLeft);
-                        }
-                        break;
-
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        if (currentLineIndex < allLines.length - 1) {
-                            const nextLine = allLines[currentLineIndex + 1];
-                            let baseLeft = cursor.getBoundingClientRect().left;
-                            if (selectedEls.length > 0) {
-                                baseLeft = selectedEls[selectedEls.length - 1].getBoundingClientRect().right;
-                            }
-                            if (!selectionActive && selectedEls.length > 0) {
-                                clearSelectionOnly();
-                            }
-                            moveCursorToNearestPosition(nextLine, baseLeft);
-                        }
-                        break;
-
-                    case 'Backspace':
-                        e.preventDefault();
-                        if (selectedEls.length > 0) {
-                            replaceSelectionWithCursor();
-                        } else if (cursorIndex > 0) {
-                            children[cursorIndex - 1].remove();
-                        } else if (currentLineIndex > 0) {
-                            const prevLine = allLines[currentLineIndex - 1];
-                            const elementsToMove = children.filter(el => el !== cursor);
-                            elementsToMove.forEach(el => prevLine.appendChild(el));
-                            currentLine.remove();
-                            currentLine = prevLine;
-                            currentLine.id = 'currentLine';
-                            setupLineTapEvents();
-                        }
-                        break;
-
-                    case 'Delete':
-                        e.preventDefault();
-                        if (selectedEls.length > 0) {
-                            replaceSelectionWithCursor();
-                        } else if (cursorIndex < children.length - 1) {
-                            children[cursorIndex + 1].remove();
-                        } else if (currentLineIndex < allLines.length - 1) {
-                            const nextLine = allLines[currentLineIndex + 1];
-                            const nextChildren = Array.from(nextLine.children).filter(el => el.id !== 'cursor');
-                            nextChildren.forEach(el => currentLine.appendChild(el));
-                            nextLine.remove();
-                            setupLineTapEvents();
-                        }
-                        break;
-
-                    case 'Enter':
-                        e.preventDefault();
-                        if (selectedEls.length > 0) replaceSelectionWithCursor();
-                        document.getElementById('btnEnter').click();
-                        break;
-
-                    case ' ':
-                        e.preventDefault();
-                        if (selectedEls.length > 0) replaceSelectionWithCursor();
-                        document.getElementById('btnSpace').click();
-                        break;
-
-                    case 'Tab':
-                        e.preventDefault();
-                        if (selectedEls.length > 0) replaceSelectionWithCursor();
-                        for (let i = 0; i < 4; i++) {
-                            const space = document.createElement('span');
-                            space.className = 'space-char';
-                            currentLine.insertBefore(space, cursor);
-                        }
-                        break;
-
-                    case 'PageUp':
-                        e.preventDefault();
-                        displayArea.scrollTop -= displayArea.clientHeight * 0.8;
-                        break;
-
-                    case 'PageDown':
-                        e.preventDefault();
-                        displayArea.scrollTop += displayArea.clientHeight * 0.8;
-                        break;
-                }
-            });
-            // === 画面右下ボタンのコピペ・切り取り連動制御 ===
-            // HTML上のボタンID（アプリの定義に合わせて適宜自動マッチします）
-            const btnCopy  = document.getElementById('btnCopy')  || document.querySelector('button[title*="コピー"]');
-            const btnPaste = document.getElementById('btnPaste') || document.querySelector('button[title*="貼り付け"]');
-            const btnCut   = document.getElementById('btnCut')   || document.querySelector('button[title*="切り取り"]') || document.querySelector('button[title*="カット"]');
-
-            // 共通処理：現在選択されている要素を取得
-            function getSelectedElements() {
-                return Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
             }
 
-            // 右下「コピー」ボタン連動
-            if (btnCopy) {
-                btnCopy.addEventListener('click', function(e) {
-                    finalizeAll(); // 既存の描画確定処理
-                    const selectedEls = getSelectedElements();
-                    if (selectedEls.length > 0) {
-                        appClipboardData = selectedEls.map(el => {
-                            return {
-                                type: el.classList.contains('char-item') ? 'char' : 'space',
-                                src: el.querySelector('img') ? el.querySelector('img').src : null
-                            };
-                        });
-                    }
-                });
-            }
-
-            // 右下「切り取り」ボタン連動
-            if (btnCut) {
-                btnCut.addEventListener('click', function(e) {
-                    finalizeAll();
-                    const selectedEls = getSelectedElements();
-                    if (selectedEls.length > 0) {
-                        // コピー
-                        appClipboardData = selectedEls.map(el => {
-                            return {
-                                type: el.classList.contains('char-item') ? 'char' : 'space',
-                                src: el.querySelector('img') ? el.querySelector('img').src : null
-                            };
-                        });
-                        // 削除してカーソルを戻す
-                        replaceSelectionWithCursor();
-                    }
-                });
-            }
-
-            // 右下「貼り付け」ボタン連動
-            if (btnPaste) {
-                btnPaste.addEventListener('click', function(e) {
-                    finalizeAll();
-                    const selectedEls = getSelectedElements();
-
-                    if (appClipboardData.length > 0) {
-                        // 範囲選択があれば先に上書き消去
-                        if (selectedEls.length > 0) {
-                            replaceSelectionWithCursor();
-                        }
-
-                        // コピーされているデータを現在のカーソル位置に順番に挿入
-                        appClipboardData.forEach(data => {
-                            if (data.type === 'char') {
-                                const charItem = document.createElement('div');
-                                charItem.className = 'char-item';
-                                const img = document.createElement('img');
-                                img.src = data.src;
-                                charItem.appendChild(img);
-                                currentLine.insertBefore(charItem, cursor);
-                            } else if (data.type === 'space') {
-                                const spaceChar = document.createElement('span');
-                                spaceChar.className = 'space-char';
-                                currentLine.insertBefore(spaceChar, cursor);
-                            }
-                        });
-                    }
-                });
-            }
-        })();
+            // アプリ起動時、および念のため少し遅らせてボタンへの紐付けを実行
+            initRightBottomButtons();
+            setTimeout(initRightBottomButtons, 500);
         // === ここまで追加：キーボードイベント制御（コピペ対応版） ===
     </script>
 </body>
