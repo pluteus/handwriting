@@ -787,7 +787,7 @@
             }
         }
 
-        function moveCursorToNearestPosition(lineElement, tapX) {
+function moveCursorToNearestPosition(lineElement, tapX) {
 //          【最優先追加】カーソルが移動したときは、理由を問わず画面上のすべての範囲選択を強制解除する
             document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
             
@@ -839,15 +839,12 @@
             lineElement.id = 'currentLine';
             currentLine = lineElement;
             cursor = newCursor;
-        }
+        } // ★不足していた閉じカッコをここに復元しました
 
         function setupLineTapEvents() {
             const lines = document.querySelectorAll('.line');
             lines.forEach(line => {
-                // すでにあるリスナとの重複登録を防ぐため、一度クリアして再設定するのが望ましいですが
-                // ここではシンプルに上書き可能な形、または通常のclick登録としています
                 line.onclick = function(e) {
-                    // 子要素（文字など）ではなく行自体がクリックを拾えるようにする
                     const tapX = e.clientX;
                     moveCursorToNearestPosition(line, tapX);
                 };
@@ -1074,9 +1071,662 @@
                 }
             }
         }
-        // === 画面右下ボタン ＆ キーボードショートカット完全統合制御 ===
 
-        // 1. 画面右下ボタンのクリックイベント（既存の正常な関数へ一本化）
+        document.getElementById('btnSpace').addEventListener('click', function() {
+            finalizeAll();
+            replaceSelectionWithCursor();
+            const space = document.createElement('span');
+            space.className = 'space-char';
+            currentLine.insertBefore(space, cursor);
+        });
+
+        document.getElementById('btnEnter').addEventListener('click', function() {
+            finalizeAll();
+            replaceSelectionWithCursor();
+
+            const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+            const allChildren = Array.from(currentLine.children);
+
+            const elementsToMove = [];
+            for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+                elementsToMove.push(allChildren[i]);
+            }
+
+            const newLine = document.createElement('div');
+            newLine.className = 'line';
+
+            const newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.id = 'cursor';
+            newLine.appendChild(newCursor);
+
+            elementsToMove.forEach(function(el) {
+                newLine.appendChild(el);
+            });
+
+            currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+
+            const oldCursor = currentLine.querySelector('.cursor');
+            if (oldCursor) oldCursor.remove();
+
+            currentLine.id = '';
+            newLine.id = 'currentLine';
+            currentLine = newLine;
+            cursor = newCursor;
+
+            setupLineTapEvents();
+
+            displayArea.scrollTop = displayArea.scrollHeight;
+        });
+
+        // === ツールバー機能 ===
+        function captureDisplayArea() {
+            finalizeAll();
+
+            const lines = document.querySelectorAll('.line');
+            if (lines.length === 0) return null;
+
+            const captureCanvas = document.createElement('canvas');
+            const padding = 20;
+            const lineHeight = 44;
+
+            let maxWidth = 0;
+            lines.forEach(line => {
+                const chars = line.querySelectorAll('.char-item, .space-char');
+                let width = padding * 2;
+                chars.forEach(char => {
+                    const rect = char.getBoundingClientRect();
+                    width += rect.width + 4;
+                });
+                if (width > maxWidth) maxWidth = width;
+            });
+
+            captureCanvas.width = Math.max(maxWidth, 400);
+            captureCanvas.height = lines.length * lineHeight + padding * 2;
+
+            const cctx = captureCanvas.getContext('2d');
+            cctx.fillStyle = '#ffffff';
+            cctx.fillRect(0, 0, captureCanvas.width, captureCanvas.height);
+
+            cctx.strokeStyle = '#eeeeee';
+            cctx.lineWidth = 1;
+
+            lines.forEach((line, lineIdx) => {
+                const y = padding + lineIdx * lineHeight;
+                cctx.beginPath();
+                cctx.moveTo(0, y + lineHeight - 4);
+                cctx.lineTo(captureCanvas.width, y + lineHeight - 4);
+                cctx.stroke();
+
+                let x = padding;
+                const chars = line.querySelectorAll('.char-item, .space-char');
+                chars.forEach((char) => {
+                    if (char.classList.contains('space-char')) {
+                        x += 16;
+                    } else {
+                        const img = char.querySelector('img');
+                        if (img && img.complete) {
+                            const w = parseInt(char.style.width) || 32;
+                            cctx.drawImage(img, x, y, w, 32);
+                            x += w + 4;
+                        }
+                    }
+                });
+            });
+
+            return captureCanvas;
+        }
+
+        document.getElementById('btnShareKeep').addEventListener('click', function() {
+            const captureCanvas = captureDisplayArea();
+            if (!captureCanvas) return;
+
+            captureCanvas.toBlob(function(blob) {
+                const file = new File([blob], 'handwriting.png', { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({
+                        files: [file],
+                        title: '走り書きメモ',
+                        text: '手書きメモを共有します'
+                    }).catch(function(err) {
+                        console.log('Share cancelled', err);
+                    });
+                } else {
+                    const url = captureCanvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'handwriting.png';
+                    a.click();
+                    alert('共有機能が利用できないため、画像をダウンロードしました。Google Keepに手動でアップロードしてください。');
+                }
+            });
+        });
+
+        document.getElementById('btnSaveImage').addEventListener('click', function() {
+            const captureCanvas = captureDisplayArea();
+            if (!captureCanvas) return;
+
+            const url = captureCanvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'handwriting_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.png';
+            a.click();
+        });
+
+        // 設定
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const settingAutoTime = document.getElementById('settingAutoTime');
+        const settingMonoWidth = document.getElementById('settingMonoWidth');
+        const settingPropMargin = document.getElementById('settingPropMargin');
+        const settingCharRes = document.getElementById('settingCharRes');
+        const autoTimeDisplay = document.getElementById('autoTimeDisplay');
+
+        document.getElementById('btnSettings').addEventListener('click', function() {
+            settingsOverlay.classList.add('show');
+        });
+
+        document.getElementById('btnCloseSettings').addEventListener('click', function() {
+            const newTime = parseInt(settingAutoTime.value, 10);
+            if (newTime >= 1 && newTime <= 30) {
+                AUTO_FINALIZE_DELAY = newTime * 1000;
+                autoTimeDisplay.textContent = newTime;
+            }
+            MONO_WIDTH = settingMonoWidth.checked;
+            const newMargin = parseInt(settingPropMargin.value, 10);
+            if (!isNaN(newMargin) && newMargin >= 0 && newMargin <= 10) {
+                PROP_MARGIN = newMargin;
+            }
+            const newCharRes = parseInt(settingCharRes.value, 10);
+            if (!isNaN(newCharRes) && newCharRes >= 32 && newCharRes <= 256) {
+                CHAR_RESOLUTION = newCharRes;
+            }
+            settingsOverlay.classList.remove('show');
+        });
+
+        settingsOverlay.addEventListener('click', function(e) {
+            if (e.target === settingsOverlay) {
+                settingsOverlay.classList.remove('show');
+            }
+        });
+
+        // フルスクリーン
+        document.getElementById('btnFullscreen').addEventListener('click', function() {
+            document.body.classList.add('fullscreen');
+        });
+
+        document.getElementById('btnExitFullscreen').addEventListener('click', function() {
+            document.body.classList.remove('fullscreen');
+        });
+
+        document.body.addEventListener('touchmove', function(e) {
+            if (document.body.classList.contains('fullscreen')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        updateActiveState();
+
+        // === ボタンダブルタップ拡大防止 ===
+        document.querySelectorAll('.btn').forEach(function(btn) {
+            let lastTap = 0;
+            btn.addEventListener('touchend', function(e) {
+                const now = Date.now();
+                if (now - lastTap < 350) {
+                    e.preventDefault();
+                }
+                lastTap = now;
+            }, { passive: false });
+        });
+
+
+        // === 境界線のドラッグ調整 ＆ 入力エリアの動的サイズ計算（長方形化対応） ===
+        (function() {
+            const displayArea = document.getElementById('displayArea');
+            const inputArea = document.querySelector('.input-area');
+            
+            let displayHeight = window.innerHeight * 0.5;
+            displayArea.style.flex = 'none';
+            displayArea.style.height = displayHeight + 'px';
+
+            let isDragging = false;
+            let startY = 0;
+            let startHeight = 0;
+
+            function startResize(e) {
+                const rect = displayArea.getBoundingClientRect();
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                if (rect.bottom - clientY <= 15) {
+                    isDragging = true;
+                    startY = clientY;
+                    startHeight = displayArea.offsetHeight;
+                    if (!e.touches) e.preventDefault();
+                }
+            }
+
+            function doResize(e) {
+                if (!isDragging) return;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const deltaY = clientY - startY;
+                
+                let newHeight = startHeight + deltaY;
+                const minH = 100;
+                const maxH = window.innerHeight - 150;
+                newHeight = Math.max(minH, Math.min(maxH, newHeight));
+                
+                displayHeight = newHeight;
+                displayArea.style.height = displayHeight + 'px';
+                checkLayout(); 
+            }
+
+            function endResize() {
+                isDragging = false;
+            }
+
+            displayArea.addEventListener('mousedown', startResize);
+            window.addEventListener('mousemove', doResize);
+            window.addEventListener('mouseup', endResize);
+
+            displayArea.addEventListener('touchstart', startResize, { passive: true });
+            window.addEventListener('touchmove', function(e) {
+                if (isDragging) {
+                    e.preventDefault(); 
+                    doResize(e);
+                }
+            }, { passive: false });
+            window.addEventListener('touchend', endResize);
+
+
+            const PADDING = 10 * 2;   
+            const GAP = 8;            
+            const BTN_COL_W = 54;     
+            const BTN_COLS = 2;       
+            const CV_COUNT = 2;       
+            
+            const FIXED_W = BTN_COL_W * BTN_COLS + GAP * (BTN_COLS + CV_COUNT - 1) + PADDING;
+
+            function checkLayout() {
+                if (document.body.classList.contains('fullscreen')) {
+                    displayArea.style.height = 'auto';
+                    displayArea.style.flex = '1';
+                } else {
+                    displayArea.style.flex = 'none';
+                    displayArea.style.height = displayHeight + 'px';
+                }
+
+                const totalW = inputArea.offsetWidth;
+                const totalH = inputArea.clientHeight;
+
+                const availableW = totalW - FIXED_W;
+                let maxWForCanvas = Math.floor(availableW / CV_COUNT);
+                if (maxWForCanvas < 40) maxWForCanvas = 40; 
+
+                const maxHForCanvas = Math.max(40, totalH - PADDING);
+
+                let finalW = Math.min(maxWForCanvas, maxHForCanvas);
+                let finalH = finalW;
+
+                const requiredBtnH = 48 * 2 + GAP;
+
+                if (maxHForCanvas < requiredBtnH) {
+                    finalH = maxHForCanvas;
+                    finalW = maxWForCanvas;
+                } else {
+                    if (finalH === maxHForCanvas && finalW < maxWForCanvas) {
+                        finalW = maxWForCanvas;
+                    }
+                }
+
+                inputArea.style.setProperty('--cv-w', finalW + 'px');
+                inputArea.style.setProperty('--cv-h', finalH + 'px');
+            }
+
+            checkLayout();
+            const ro = new ResizeObserver(checkLayout);
+            ro.observe(inputArea);
+            window.addEventListener('resize', checkLayout);
+
+            document.getElementById('btnFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
+            document.getElementById('btnExitFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
+        })();
+
+        // === displayArea タッチ＆マウスドラッグ統合制御 ===
+        (function() {
+            const zoomContainer = document.getElementById('zoomContainer');
+            let currentScale = 1.0;
+            const MIN_SCALE = 0.5;
+            const MAX_SCALE = 4.0;
+            const LONG_PRESS_MS = 500; 
+
+            let mode = 'idle'; 
+            let mouseDragged = false; 
+
+            let selectStartEl = null;
+            let selectEndEl   = null;
+
+            let touchStartX = 0, touchStartY = 0;
+            let longPressTimer = null;
+
+            // マウス用の長押し・移動判定変数
+            let mouseLongPressTimer = null;
+            let mouseStartX = 0, mouseStartY = 0;
+            let isMouseSelectionReady = false; 
+
+            let scrollStartX = 0, scrollStartY = 0;
+            let scrollOriginLeft = 0, scrollOriginTop = 0;
+
+            let pinchStartDist = 0;
+            let pinchStartScale = 1.0;
+
+            function getTouchDist(t) {
+                const dx = t[0].clientX - t[1].clientX;
+                const dy = t[0].clientY - t[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            function charAtPoint(x, y) {
+                const els = zoomContainer.querySelectorAll('.char-item, .space-char');
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
+                }
+                return null;
+            }
+
+            function updateSelection(startEl, endEl) {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                if (!startEl || !endEl) return;
+                const all = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                const si = all.indexOf(startEl);
+                const ei = all.indexOf(endEl);
+                if (si < 0 || ei < 0) return;
+                const lo = Math.min(si, ei), hi = Math.max(si, ei);
+                for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
+                cursor.classList.add('hidden');
+            }
+
+            function clearSelection() {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                cursor.classList.remove('hidden');
+            }
+
+            function cancelLongPress() {
+                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+            }
+
+            function cancelMouseLongPress() {
+                if (mouseLongPressTimer) { clearTimeout(mouseLongPressTimer); mouseLongPressTimer = null; }
+            }
+
+            function moveCursorToPoint(x, y) {
+                const lines = Array.from(zoomContainer.querySelectorAll('.line'));
+                let targetLine = null;
+                
+                for (const line of lines) {
+                    const r = line.getBoundingClientRect();
+                    if (y >= r.top && y <= r.bottom) {
+                        targetLine = line;
+                        break;
+                    }
+                }
+                
+                if (targetLine && targetLine.querySelectorAll('.char-item, .space-char').length === 0) {
+                    moveCursorToNearestPosition(targetLine, x);
+                    return;
+                }
+
+                const els = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                if (els.length === 0) {
+                    if (lines.length > 0) moveCursorToNearestPosition(lines[0], x);
+                    return;
+                }
+                
+                let nearest = null, nearestDist = Infinity;
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    const cx = (r.left + r.right) / 2;
+                    const cy = (r.top + r.bottom) / 2;
+                    const dist = Math.abs(cx - x) + Math.abs(cy - y) * 2;
+                    if (dist < nearestDist) { nearestDist = dist; nearest = el; }
+                }
+                if (!nearest) return;
+                const r = nearest.getBoundingClientRect();
+                const cx = (r.left + r.right) / 2;
+                if (x < cx) {
+                    nearest.parentNode.insertBefore(cursor, nearest);
+                } else {
+                    nearest.parentNode.insertBefore(cursor, nearest.nextSibling);
+                }
+                currentLine = cursor.parentNode;
+                
+                lines.forEach(l => l.id = '');
+                currentLine.id = 'currentLine';
+            }
+
+            function forceEndMouseSelection() {
+                cancelMouseLongPress();
+                if (mode === 'mouse_selecting' || isMouseSelectionReady || selectStartEl) {
+                    mode = 'idle';
+                    isMouseSelectionReady = false;
+                    selectStartEl = null;
+                    selectEndEl = null;
+                    return true; 
+                }
+                return false;
+            }
+
+            displayArea.addEventListener('mousedown', function(e) {
+                if (e.button !== 0) return;
+                if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
+
+                const startEl = charAtPoint(e.clientX, e.clientY);
+                if (startEl) {
+                    mouseStartX = e.clientX;
+                    mouseStartY = e.clientY;
+                    mouseDragged = false;
+                    isMouseSelectionReady = false; 
+                    selectStartEl = startEl;
+                    selectEndEl = startEl;
+
+                    cancelMouseLongPress();
+                    mouseLongPressTimer = setTimeout(function() {
+                        isMouseSelectionReady = true;
+                        mode = 'mouse_selecting';
+                        clearSelection();
+                        selectStartEl.classList.add('selected');
+                        cursor.classList.add('hidden');
+                    }, LONG_PRESS_MS);
+                }
+            });
+
+            window.addEventListener('mousemove', function(e) {
+                if (!selectStartEl) return;
+
+                const dx = e.clientX - mouseStartX;
+                const dy = e.clientY - mouseStartY;
+                const moveDistance = Math.sqrt(dx * dx + dy * dy);
+
+                if (!isMouseSelectionReady && moveDistance > 8) {
+                    cancelMouseLongPress();
+                    isMouseSelectionReady = true;
+                    mode = 'mouse_selecting';
+                    clearSelection();
+                    selectStartEl.classList.add('selected');
+                    cursor.classList.add('hidden');
+                }
+
+                if (mode === 'mouse_selecting') {
+                    mouseDragged = true; 
+                    const el = charAtPoint(e.clientX, e.clientY);
+                    if (el && el !== selectEndEl) {
+                        selectEndEl = el;
+                        updateSelection(selectStartEl, selectEndEl);
+                    }
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            window.addEventListener('mouseup', function(e) {
+                if (e.button !== 0) return;
+                
+                const wasSelecting = forceEndMouseSelection();
+                
+                if (wasSelecting && mouseDragged) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
+                if (!mouseDragged && !wasSelecting && mouseStartX !== 0) {
+                    if (charAtPoint(mouseStartX, mouseStartY) || e.target.closest('.line')) {
+                        clearSelection();
+                        moveCursorToPoint(mouseStartX, mouseStartY);
+                    }
+                }
+
+                mouseStartX = 0;
+                mouseStartY = 0;
+                mouseDragged = false;
+            }, true); 
+
+            displayArea.addEventListener('dragstart', function(e) {
+                if (selectStartEl) {
+                    e.preventDefault();
+                }
+            });
+
+            window.addEventListener('blur', function() {
+                forceEndMouseSelection();
+                mouseDragged = false;
+            });
+            document.addEventListener('mouseleave', function() {
+                forceEndMouseSelection();
+                mouseDragged = false;
+            });
+
+            displayArea.addEventListener('click', function(e) {
+                if (mouseDragged) {
+                    mouseDragged = false; 
+                    e.stopPropagation();
+                    e.preventDefault();
+                    return;
+                }
+
+                const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) {
+                    clearSelection();
+                    mode = 'idle';
+                }
+            }, true); 
+
+            displayArea.addEventListener('touchstart', function(e) {
+                if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) {
+                    return;
+                }
+
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    touchStartX = t.clientX;
+                    touchStartY = t.clientY;
+                    
+                    scrollStartX = t.clientX;
+                    scrollStartY = t.clientY;
+                    scrollOriginLeft = displayArea.scrollLeft;
+                    scrollOriginTop  = displayArea.scrollTop;
+
+                    mode = 'longpress_pending';
+                    cancelLongPress();
+                    
+                    longPressTimer = setTimeout(function() {
+                        mode = 'selecting';
+                        selectStartEl = charAtPoint(touchStartX, touchStartY);
+                        selectEndEl = selectStartEl;
+                        clearSelection();
+                        if (selectStartEl) selectStartEl.classList.add('selected');
+                        cursor.classList.add('hidden');
+                    }, LONG_PRESS_MS);
+
+                } else if (e.touches.length === 2) {
+                    cancelLongPress();
+                    mode = 'pinching';
+                    const dist = getTouchDist(e.touches);
+                    pinchStartDist  = dist;
+                    pinchStartScale = currentScale;
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    scrollStartX = mx;
+                    scrollStartY = my;
+                    scrollOriginLeft = displayArea.scrollLeft;
+                    scrollOriginTop  = displayArea.scrollTop;
+                    clearSelection();
+                }
+                if (mode !== 'idle' && mode !== 'mouse_selecting') e.preventDefault();
+            }, { passive: false });
+
+            displayArea.addEventListener('touchmove', function(e) {
+                if (mode === 'idle' || mode === 'mouse_selecting') return;
+                e.preventDefault();
+
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    const dx = t.clientX - touchStartX;
+                    const dy = t.clientY - touchStartY;
+                    const moved = Math.sqrt(dx*dx + dy*dy);
+
+                    if (mode === 'longpress_pending') {
+                        if (moved > 8) { 
+                            cancelLongPress(); 
+                            mode = 'scrolling_1finger'; 
+                        }
+                    }
+
+                    if (mode === 'scrolling_1finger') {
+                        const scrollDX = t.clientX - scrollStartX;
+                        const scrollDY = t.clientY - scrollStartY;
+                        displayArea.scrollLeft = scrollOriginLeft - scrollDX;
+                        displayArea.scrollTop  = scrollOriginTop - scrollDY;
+                    } else if (mode === 'selecting') {
+                        const el = charAtPoint(t.clientX, t.clientY);
+                        if (el && el !== selectEndEl) {
+                            selectEndEl = el;
+                            updateSelection(selectStartEl, selectEndEl);
+                        }
+                    }
+                } else if (e.touches.length === 2) {
+                    const dist = getTouchDist(e.touches);
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const pinchRatio = dist / pinchStartDist;
+                    const scrollDX   = mx - scrollStartX;
+                    const scrollDY   = my - scrollStartY;
+
+                    let newScale = pinchStartScale * pinchRatio;
+                    newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
+                    currentScale = newScale;
+                    zoomContainer.style.transform = 'scale(' + currentScale + ')';
+
+                    displayArea.scrollLeft = scrollOriginLeft - scrollDX;
+                    displayArea.scrollTop  = scrollOriginTop  - scrollDY;
+                }
+            }, { passive: false });
+
+            displayArea.addEventListener('touchend', function(e) {
+                if (e.touches.length === 0) {
+                    if (mode === 'longpress_pending') {
+                        cancelLongPress();
+                        moveCursorToPoint(touchStartX, touchStartY);
+                        clearSelection();
+                        cursor.classList.remove('hidden');
+                    }
+                    if (mode !== 'selecting') mode = 'idle';
+                }
+            }, { passive: true });
+        })();
+
+        // === 画面右下ボタン ＆ キーボードショートカット完全統合制御 ===
         document.getElementById('btnCopy').addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1101,28 +1751,23 @@
             pasteFromClipboard();
         });
 
-        // 2. キーボードショートカット（Ctrl + C / X / V）のイベントも同じ関数に完全同期
         window.addEventListener('keydown', function(e) {
-            // Metaキー（MacのCmd）または Ctrlキーが押されているかチェック
             const isCtrl = e.ctrlKey || e.metaKey;
             if (!isCtrl) return;
 
             const key = e.key.toLowerCase();
 
             if (key === 'c') {
-                // コピー
                 e.preventDefault();
                 finalizeAll();
                 copySelectedToClipboard();
             } else if (key === 'x') {
-                // 切り取り
                 e.preventDefault();
                 finalizeAll();
                 if (copySelectedToClipboard()) {
                     getSelectedElements().forEach(el => el.remove());
                 }
             } else if (key === 'v') {
-                // 貼り付け
                 e.preventDefault();
                 finalizeAll();
                 if (internalClipboard.length > 0) {
@@ -1131,107 +1776,6 @@
                 }
             }
         });
-        // === ここから追加：キーボードイベント制御（コピペ対応版） ===
-        // === 【完全版】画面右下ボタンのコピペ・切り取り連動制御（強制上書き） ===
-            function initRightBottomButtons() {
-                // 1. 画面内のすべてのボタンから、見た目の文字やid、関数名でターゲットを徹底捜索
-                const allButtons = Array.from(document.querySelectorAll('button, input[type="button"], div.btn'));
-                
-                let btnCopy = null;
-                let btnCut = null;
-                let btnPaste = null;
-
-                allButtons.forEach(btn => {
-                    const text = (btn.innerText || btn.value || btn.textContent || '').trim();
-                    const id = (btn.id || '').toLowerCase();
-                    const onclickStr = btn.getAttribute('onclick') || '';
-
-                    // コピーボタンの特定
-                    if (text.includes('コピー') || id.includes('copy') || onclickStr.includes('copy')) {
-                        btnCopy = btn;
-                    }
-                    // 切り取りボタンの特定
-                    if (text.includes('切り取り') || text.includes('カット') || id.includes('cut') || onclickStr.includes('cut')) {
-                        btnCut = btn;
-                    }
-                    // 貼り付けボタンの特定
-                    if (text.includes('貼り付け') || text.includes('ペースト') || id.includes('paste') || onclickStr.includes('paste')) {
-                        btnPaste = btn;
-                    }
-                });
-
-                // 2. 既存の古いインラインイベント(onclick="...")が邪魔しないように無効化し、新ロジックを最優先で注入
-                if (btnCopy) {
-                    btnCopy.onclick = null; // 既存のonclickをクリア
-                    btnCopy.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        finalizeAll(); 
-                        const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
-                        if (selectedEls.length > 0) {
-                            appClipboardData = selectedEls.map(el => {
-                                return {
-                                    type: el.classList.contains('char-item') ? 'char' : 'space',
-                                    src: el.querySelector('img') ? el.querySelector('img').src : null
-                                };
-                            });
-                        }
-                    }, true);
-                }
-
-                if (btnCut) {
-                    btnCut.onclick = null; // 既存のonclickをクリア
-                    btnCut.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        finalizeAll();
-                        const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
-                        if (selectedEls.length > 0) {
-                            appClipboardData = selectedEls.map(el => {
-                                return {
-                                    type: el.classList.contains('char-item') ? 'char' : 'space',
-                                    src: el.querySelector('img') ? el.querySelector('img').src : null
-                                };
-                            });
-                            replaceSelectionWithCursor(); // 選択範囲を削除してカーソルを戻す
-                        }
-                    }, true);
-                }
-
-                if (btnPaste) {
-                    btnPaste.onclick = null; // 既存のonclickをクリア
-                    btnPaste.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        finalizeAll();
-                        const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
-
-                        if (appClipboardData.length > 0) {
-                            if (selectedEls.length > 0) {
-                                replaceSelectionWithCursor(); // 範囲選択があれば先に消去
-                            }
-                            appClipboardData.forEach(data => {
-                                if (data.type === 'char') {
-                                    const charItem = document.createElement('div');
-                                    charItem.className = 'char-item';
-                                    const img = document.createElement('img');
-                                    img.src = data.src;
-                                    charItem.appendChild(img);
-                                    currentLine.insertBefore(charItem, cursor);
-                                } else if (data.type === 'space') {
-                                    const spaceChar = document.createElement('span');
-                                    spaceChar.className = 'space-char';
-                                    currentLine.insertBefore(spaceChar, cursor);
-                                }
-                            });
-                        }
-                    }, true);
-                }
-            }
-
-            // アプリ起動時、および念のため少し遅らせてボタンへの紐付けを実行
-            initRightBottomButtons();
-            setTimeout(initRightBottomButtons, 500);
         // === ここまで追加：キーボードイベント制御（コピペ対応版） ===
     </script>
 </body>
