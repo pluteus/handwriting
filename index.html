@@ -1630,6 +1630,198 @@
                 }
             });
         })();
+        // === キーボードイベント制御 ===
+        (function() {
+            // ヘルパー：指定した要素が選択されているかどうか
+            function isSelected(el) {
+                return el.classList.contains('selected');
+            }
+
+            // ヘルパー：選択ハイライトの更新（範囲指定）
+            function updateSelectionRange(startEl, endEl) {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                if (!startEl || !endEl) return;
+                const all = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                const si = all.indexOf(startEl);
+                const ei = all.indexOf(endEl);
+                if (si < 0 || ei < 0) return;
+                const lo = Math.min(si, ei), hi = Math.max(si, ei);
+                for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
+                cursor.classList.add('hidden');
+            }
+
+            window.addEventListener('keydown', function(e) {
+                // 入力フォーム等にフォーカスがある場合はスキップ（設定画面など）
+                if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+                    return;
+                }
+
+                const children = Array.from(currentLine.children);
+                const cursorIndex = children.indexOf(cursor);
+                const allLines = Array.from(document.querySelectorAll('.line'));
+                const currentLineIndex = allLines.indexOf(currentLine);
+
+                // 範囲選択用の基準要素
+                let selectionActive = e.shiftKey;
+                const selectedEls = Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
+
+                // 事前に確定処理を走らせる
+                finalizeAll();
+
+                switch (e.key) {
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        if (cursorIndex > 0) {
+                            const prevEl = children[cursorIndex - 1];
+                            if (selectionActive) {
+                                // 選択開始要素の決定
+                                let startEl = selectedEls.length > 0 ? (selectedEls[0].classList.contains('select-start') ? selectedEls[0] : selectedEls[selectedEls.length - 1]) : prevEl;
+                                if (selectedEls.length === 0) prevEl.classList.add('select-start');
+                                currentLine.insertBefore(cursor, prevEl);
+                                updateSelectionRange(startEl, prevEl);
+                            } else {
+                                if (selectedEls.length > 0) {
+                                    // 選択解除して選択範囲の左端に移動
+                                    currentLine.insertBefore(cursor, selectedEls[0]);
+                                    replaceSelectionWithCursor();
+                                } else {
+                                    currentLine.insertBefore(cursor, prevEl);
+                                }
+                            }
+                        } else if (currentLineIndex > 0) {
+                            // 上の行の末尾へ移動
+                            const prevLine = allLines[currentLineIndex - 1];
+                            prevLine.appendChild(cursor);
+                            currentLine.id = '';
+                            prevLine.id = 'currentLine';
+                            currentLine = prevLine;
+                            if (!selectionActive) replaceSelectionWithCursor();
+                        }
+                        break;
+
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        if (cursorIndex < children.length - 1) {
+                            const nextEl = children[cursorIndex + 1];
+                            if (selectionActive) {
+                                let startEl = selectedEls.length > 0 ? (selectedEls[0].classList.contains('select-start') ? selectedEls[0] : selectedEls[0]) : nextEl;
+                                if (selectedEls.length === 0) nextEl.classList.add('select-start');
+                                currentLine.insertBefore(cursor, nextEl.nextSibling);
+                                updateSelectionRange(startEl, nextEl);
+                            } else {
+                                if (selectedEls.length > 0) {
+                                    // 選択解除して選択範囲の右端に移動
+                                    currentLine.insertBefore(cursor, selectedEls[selectedEls.length - 1].nextSibling);
+                                    replaceSelectionWithCursor();
+                                } else {
+                                    currentLine.insertBefore(cursor, nextEl.nextSibling);
+                                }
+                            }
+                        } else if (currentLineIndex < allLines.length - 1) {
+                            // 下の行の先頭へ移動
+                            const nextLine = allLines[currentLineIndex + 1];
+                            nextLine.insertBefore(cursor, nextLine.firstChild);
+                            currentLine.id = '';
+                            nextLine.id = 'currentLine';
+                            currentLine = nextLine;
+                            if (!selectionActive) replaceSelectionWithCursor();
+                        }
+                        break;
+
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        if (currentLineIndex > 0) {
+                            const prevLine = allLines[currentLineIndex - 1];
+                            // 現在のX位置に一番近い要素を探してカーソルを移動
+                            const cursorRect = cursor.getBoundingClientRect();
+                            moveCursorToNearestPosition(prevLine, cursorRect.left);
+                            if (!selectionActive) replaceSelectionWithCursor();
+                        }
+                        break;
+
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        if (currentLineIndex < allLines.length - 1) {
+                            const nextLine = allLines[currentLineIndex + 1];
+                            const cursorRect = cursor.getBoundingClientRect();
+                            moveCursorToNearestPosition(nextLine, cursorRect.left);
+                            if (!selectionActive) replaceSelectionWithCursor();
+                        }
+                        break;
+
+                    case 'Backspace':
+                        e.preventDefault();
+                        if (selectedEls.length > 0) {
+                            replaceSelectionWithCursor();
+                        } else if (cursorIndex > 0) {
+                            children[cursorIndex - 1].remove();
+                        } else if (currentLineIndex > 0) {
+                            // 上の行と結合
+                            const prevLine = allLines[currentLineIndex - 1];
+                            const elementsToMove = children.filter(el => el !== cursor);
+                            elementsToMove.forEach(el => prevLine.appendChild(el));
+                            currentLine.remove();
+                            currentLine = prevLine;
+                            currentLine.id = 'currentLine';
+                            // カーソル位置を再取得するために位置を調整
+                            setupLineTapEvents();
+                        }
+                        break;
+
+                    case 'Delete':
+                        e.preventDefault();
+                        if (selectedEls.length > 0) {
+                            replaceSelectionWithCursor();
+                        } else if (cursorIndex < children.length - 1) {
+                            children[cursorIndex + 1].remove();
+                        } else if (currentLineIndex < allLines.length - 1) {
+                            // 下の行を結合
+                            const nextLine = allLines[currentLineIndex + 1];
+                            const nextChildren = Array.from(nextLine.children).filter(el => el.id !== 'cursor');
+                            nextChildren.forEach(el => currentLine.appendChild(el));
+                            nextLine.remove();
+                            setupLineTapEvents();
+                        }
+                        break;
+
+                    case 'Enter':
+                        e.preventDefault();
+                        replaceSelectionWithCursor();
+                        // 既存の改行ロジック（Enterボタン）を実行
+                        document.getElementById('btnEnter').click();
+                        break;
+
+                    case ' ':
+                        e.preventDefault();
+                        replaceSelectionWithCursor();
+                        // 既存の空白ロジック（空白ボタン）を実行
+                        document.getElementById('btnSpace').click();
+                        break;
+
+                    case 'Tab':
+                        e.preventDefault();
+                        replaceSelectionWithCursor();
+                        // 4つの空白（space-char）を挿入
+                        for (let i = 0; i < 4; i++) {
+                            const space = document.createElement('span');
+                            space.className = 'space-char';
+                            currentLine.insertBefore(space, cursor);
+                        }
+                        break;
+
+                    case 'PageUp':
+                        e.preventDefault();
+                        displayArea.scrollTop -= displayArea.clientHeight * 0.8;
+                        break;
+
+                    case 'PageDown':
+                        e.preventDefault();
+                        displayArea.scrollTop += displayArea.clientHeight * 0.8;
+                        break;
+                }
+            });
+        })();
     </script>
 </body>
 </html>
