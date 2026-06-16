@@ -1727,30 +1727,54 @@ function moveCursorToNearestPosition(lineElement, tapX) {
         })();
 
         // === 画面右下ボタン ＆ キーボードショートカット完全統合制御 ===
-        document.getElementById('btnCopy').addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+
+        // タッチ（スマホ）とクリック（PC）のどちらでも1回だけ確実に実行する汎用ハンドラ
+        function bindRightBottomButton(btnId, actionFn) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+
+            let handled = false;
+
+            // スマホ・タブレット用（touch-action: none を完全に突破する）
+            btn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                handled = true;
+                setTimeout(() => { handled = false; }, 300); // 二重発火防止
+                actionFn();
+            }, { passive: false });
+
+            // PCマウス用
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (handled) return; // touchend側で処理済みの場合はスキップ
+                actionFn();
+            });
+        }
+
+        // コピーボタンの動作
+        bindRightBottomButton('btnCopy', function() {
             finalizeAll();
             copySelectedToClipboard();
         });
 
-        document.getElementById('btnCut').addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        // 切り取りボタンの動作
+        bindRightBottomButton('btnCut', function() {
             finalizeAll();
             if (!copySelectedToClipboard()) return;
             getSelectedElements().forEach(el => el.remove());
         });
 
-        document.getElementById('btnPaste').addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        // 貼り付けボタンの動作
+        bindRightBottomButton('btnPaste', function() {
             finalizeAll();
             if (internalClipboard.length === 0) return;
             replaceSelectionWithCursor(); 
             pasteFromClipboard();
         });
 
+        // 2. キーボードショートカット（Ctrl + C / X / V）
         window.addEventListener('keydown', function(e) {
             const isCtrl = e.ctrlKey || e.metaKey;
             if (!isCtrl) return;
