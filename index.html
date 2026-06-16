@@ -1410,7 +1410,7 @@
         })();
 
 
-        // === displayArea タッチ＆マウスドラッグ統合制御（完全対策版） ===
+        // === displayArea タッチ＆マウスドラッグ統合制御（長押し判定対応版） ===
         (function() {
             const zoomContainer = document.getElementById('zoomContainer');
             let currentScale = 1.0;
@@ -1419,13 +1419,18 @@
             const LONG_PRESS_MS = 500; 
 
             let mode = 'idle'; // 'idle', 'longpress_pending', 'selecting', 'scrolling_1finger', 'pinching', 'mouse_selecting'
-            let mouseDragged = false; // マウスドラッグが行われたかどうかのフラグ
+            let mouseDragged = false; 
 
             let selectStartEl = null;
             let selectEndEl   = null;
 
             let touchStartX = 0, touchStartY = 0;
             let longPressTimer = null;
+
+            // マウス用の長押し・移動判定変数
+            let mouseLongPressTimer = null;
+            let mouseStartX = 0, mouseStartY = 0;
+            let isMouseSelectionReady = false; // 選択モードが有効化されたかどうかのフラグ
 
             let scrollStartX = 0, scrollStartY = 0;
             let scrollOriginLeft = 0, scrollOriginTop = 0;
@@ -1469,6 +1474,10 @@
 
             function cancelLongPress() {
                 if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+            }
+
+            function cancelMouseLongPress() {
+                if (mouseLongPressTimer) { clearTimeout(mouseLongPressTimer); mouseLongPressTimer = null; }
             }
 
             function moveCursorToPoint(x, y) {
@@ -1516,47 +1525,84 @@
                 currentLine.id = 'currentLine';
             }
 
-            // === マウスの左ドラッグ範囲選択イベント ===
+            // === マウスの左ドラッグ範囲選択イベント（長押し・ドラッグ開始判定対応） ===
             displayArea.addEventListener('mousedown', function(e) {
                 if (e.button !== 0) return;
                 if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
 
                 const startEl = charAtPoint(e.clientX, e.clientY);
                 if (startEl) {
-                    mode = 'mouse_selecting';
-                    mouseDragged = false; // フラグをリセット
+                    // 初期状態の記録
+                    mouseStartX = e.clientX;
+                    mouseStartY = e.clientY;
+                    mouseDragged = false;
+                    isMouseSelectionReady = false; 
                     selectStartEl = startEl;
                     selectEndEl = startEl;
-                    clearSelection();
-                    selectStartEl.classList.add('selected');
-                    cursor.classList.add('hidden');
-                    e.preventDefault(); 
+
+                    // 指定時間（500ms）押し続けたら選択モードを有効化
+                    cancelMouseLongPress();
+                    mouseLongPressTimer = setTimeout(function() {
+                        isMouseSelectionReady = true;
+                        mode = 'mouse_selecting';
+                        clearSelection();
+                        selectStartEl.classList.add('selected');
+                        cursor.classList.add('hidden');
+                    }, LONG_PRESS_MS);
                 }
             });
 
             window.addEventListener('mousemove', function(e) {
-                if (mode !== 'mouse_selecting') return;
+                // まだマウス押し下げ中でない場合は無視
+                if (!selectStartEl && mode !== 'mouse_selecting') return;
 
-                mouseDragged = true; // ドラッグが移動したことを記録
-                const el = charAtPoint(e.clientX, e.clientY);
-                if (el && el !== selectEndEl) {
-                    selectEndEl = el;
-                    updateSelection(selectStartEl, selectEndEl);
+                // 動いた距離を計算
+                const dx = e.clientX - mouseStartX;
+                const dy = e.clientY - mouseStartY;
+                const moveDistance = Math.sqrt(dx * dx + dy * dy);
+
+                // 500ms経っていなくても、一定以上（8px以上）ドラッグされたら選択モードを起動
+                if (!isMouseSelectionReady && moveDistance > 8) {
+                    cancelMouseLongPress();
+                    isMouseSelectionReady = true;
+                    mode = 'mouse_selecting';
+                    clearSelection();
+                    selectStartEl.classList.add('selected');
+                    cursor.classList.add('hidden');
+                }
+
+                // 選択モードが有効な場合のみ、範囲ハイライトを更新
+                if (mode === 'mouse_selecting') {
+                    mouseDragged = true; 
+                    const el = charAtPoint(e.clientX, e.clientY);
+                    if (el && el !== selectEndEl) {
+                        selectEndEl = el;
+                        updateSelection(selectStartEl, selectEndEl);
+                    }
+                    e.preventDefault();
                 }
             });
 
             window.addEventListener('mouseup', function(e) {
+                cancelMouseLongPress(); // タイマーをクリア
+                
                 if (mode === 'mouse_selecting') {
                     mode = 'idle';
-                    // ドラッグが一度でも行われていたら、イベントの伝播をここで一度止めるための準備
+                } else if (!mouseDragged && selectStartEl && !isMouseSelectionReady) {
+                    // 長押しもドラッグもされず、ただクリックされただけの場合は通常のカーソル移動を行う
+                    moveCursorToPoint(mouseStartX, mouseStartY);
+                    clearSelection();
                 }
+
+                // 一連の変数をリセット
+                selectStartEl = null;
+                selectEndEl = null;
             });
 
             // 背景クリック時の選択解除処理
             displayArea.addEventListener('click', function(e) {
-                // マウスドラッグ選択の直後のクリックイベントだった場合は、解除処理を完全にブロックする
                 if (mouseDragged) {
-                    mouseDragged = false; // フラグを戻す
+                    mouseDragged = false; 
                     e.stopPropagation();
                     e.preventDefault();
                     return;
@@ -1567,7 +1613,7 @@
                     clearSelection();
                     mode = 'idle';
                 }
-            }, true); // キャプチャリングフェーズ(true)で最優先でインターセプトします
+            }, true); 
 
 
             // === タッチイベント制御（既存処理の維持） ===
