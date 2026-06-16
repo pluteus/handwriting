@@ -963,36 +963,22 @@
         });
 
         // === ボタン ===
-		let _backspaceSnapshot = [];
-		let _spaceSnapshot = [];
-		let _enterSnapshot = [];
+        document.getElementById('btnBackspace').addEventListener('click', function() {
+            finalizeAll();
 
-		document.getElementById('btnBackspace').addEventListener('pointerdown', function() {
-			_backspaceSnapshot = getSelectedElements().slice();
-		});
+            if (replaceSelectionFromSnapshot()) {
+                return;
+            }
 
-		document.getElementById('btnBackspace').addEventListener('click', function() {
-			finalizeAll();
+            const event = new KeyboardEvent('keydown', {
+                key: 'Backspace',
+                bubbles: true,
+                cancelable: true
+            });
 
-			if (_backspaceSnapshot.length > 0) {
-				_backspaceSnapshot.forEach(el => {
-					if (document.contains(el)) el.classList.add('selected');
-				});
-				replaceSelectionWithCursor();
-				_backspaceSnapshot = [];
-				return;
-			}
+            window.dispatchEvent(event);
+        });
 
-			_backspaceSnapshot = [];
-
-			const event = new KeyboardEvent('keydown', {
-				key: 'Backspace',
-				bubbles: true,
-				cancelable: true
-			});
-
-			window.dispatchEvent(event);
-		});
         function replaceSelectionWithCursor() {
             const sel = getSelectedElements();
             if (sel.length === 0) return false;
@@ -1010,6 +996,42 @@
         }
 
         let internalClipboard = [];
+
+        let _selectionSnapshot = [];
+
+        function saveSelectionSnapshot() {
+            _selectionSnapshot = getSelectedElements().slice();
+        }
+
+        function restoreSelectionSnapshot() {
+            if (_selectionSnapshot.length === 0) return false;
+            let restored = false;
+            _selectionSnapshot.forEach(el => {
+                if (document.contains(el)) {
+                    el.classList.add('selected');
+                    restored = true;
+                }
+            });
+            _selectionSnapshot = [];
+            return restored;
+        }
+
+        function replaceSelectionFromSnapshot() {
+            restoreSelectionSnapshot();
+            return replaceSelectionWithCursor();
+        }
+
+        function prepareEditOperation() {
+            finalizeAll();
+            replaceSelectionFromSnapshot();
+        }
+
+        ['btnBackspace', 'btnSpace', 'btnEnter'].forEach(id => {
+            document.getElementById(id).addEventListener('pointerdown', function() {
+                saveSelectionSnapshot();
+            });
+        });
+
 
         function getSelectedElements() {
             const all = Array.from(document.querySelectorAll(
@@ -1142,80 +1164,51 @@
             pasteFromClipboard();
         });
 
-		document.getElementById('btnSpace').addEventListener('pointerdown', function() {
-			_spaceSnapshot = getSelectedElements().slice();
-		});
-		document.getElementById('btnSpace').addEventListener('click', function() {
-			finalizeAll();
+        document.getElementById('btnSpace').addEventListener('click', function() {
+            prepareEditOperation();
+            const space = document.createElement('span');
+            space.className = 'space-char';
+            currentLine.insertBefore(space, cursor);
+        });
 
-			if (_spaceSnapshot.length > 0) {
-				_spaceSnapshot.forEach(el => {
-					if (document.contains(el)) {
-						el.classList.add('selected');
-					}
-				});
-			}
+        document.getElementById('btnEnter').addEventListener('click', function() {
+            prepareEditOperation();
 
-			replaceSelectionWithCursor();
+            const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+            const allChildren = Array.from(currentLine.children);
 
-			const space = document.createElement('span');
-			space.className = 'space-char';
-			currentLine.insertBefore(space, cursor);
+            const elementsToMove = [];
+            for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+                elementsToMove.push(allChildren[i]);
+            }
 
-			_spaceSnapshot = [];
-		});
+            const newLine = document.createElement('div');
+            newLine.className = 'line';
 
-		document.getElementById('btnEnter').addEventListener('pointerdown', function() {
-			_enterSnapshot = getSelectedElements().slice();
-		});
+            const newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.id = 'cursor';
+            newLine.appendChild(newCursor);
 
-		document.getElementById('btnEnter').addEventListener('click', function() {
-			finalizeAll();
+            elementsToMove.forEach(function(el) {
+                newLine.appendChild(el);
+            });
 
-			if (_enterSnapshot.length > 0) {
-				_enterSnapshot.forEach(el => {
-					if (document.contains(el)) {
-						el.classList.add('selected');
-					}
-				});
-			}
+            currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
 
-			replaceSelectionWithCursor();
+            const oldCursor = currentLine.querySelector('.cursor');
+            if (oldCursor) oldCursor.remove();
 
-			const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
-			const allChildren = Array.from(currentLine.children);
+            currentLine.id = '';
+            newLine.id = 'currentLine';
+            currentLine = newLine;
+            cursor = newCursor;
 
-			const elementsToMove = [];
-			for (let i = cursorIndex + 1; i < allChildren.length; i++) {
-				elementsToMove.push(allChildren[i]);
-			}
+            setupLineTapEvents();
 
-			const newLine = document.createElement('div');
-			newLine.className = 'line';
+            displayArea.scrollTop = displayArea.scrollHeight;
+        });
 
-			const newCursor = document.createElement('span');
-			newCursor.className = 'cursor';
-			newCursor.id = 'cursor';
-			newLine.appendChild(newCursor);
-
-			elementsToMove.forEach(el => newLine.appendChild(el));
-
-			currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
-
-			const oldCursor = currentLine.querySelector('.cursor');
-			if (oldCursor) oldCursor.remove();
-
-			currentLine.id = '';
-			newLine.id = 'currentLine';
-			currentLine = newLine;
-			cursor = newCursor;
-
-			setupLineTapEvents();
-
-			displayArea.scrollTop = displayArea.scrollHeight;
-
-			_enterSnapshot = [];
-		});
         // === ツールバー機能 ===
         function captureDisplayArea() {
             finalizeAll();
