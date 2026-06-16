@@ -2035,6 +2035,82 @@
                         break;
                 }
             });
+            // === 画面右下ボタンのコピペ・切り取り連動制御 ===
+            // HTML上のボタンID（アプリの定義に合わせて適宜自動マッチします）
+            const btnCopy  = document.getElementById('btnCopy')  || document.querySelector('button[title*="コピー"]');
+            const btnPaste = document.getElementById('btnPaste') || document.querySelector('button[title*="貼り付け"]');
+            const btnCut   = document.getElementById('btnCut')   || document.querySelector('button[title*="切り取り"]') || document.querySelector('button[title*="カット"]');
+
+            // 共通処理：現在選択されている要素を取得
+            function getSelectedElements() {
+                return Array.from(document.querySelectorAll('.char-item.selected, .space-char.selected'));
+            }
+
+            // 右下「コピー」ボタン連動
+            if (btnCopy) {
+                btnCopy.addEventListener('click', function(e) {
+                    finalizeAll(); // 既存の描画確定処理
+                    const selectedEls = getSelectedElements();
+                    if (selectedEls.length > 0) {
+                        appClipboardData = selectedEls.map(el => {
+                            return {
+                                type: el.classList.contains('char-item') ? 'char' : 'space',
+                                src: el.querySelector('img') ? el.querySelector('img').src : null
+                            };
+                        });
+                    }
+                });
+            }
+
+            // 右下「切り取り」ボタン連動
+            if (btnCut) {
+                btnCut.addEventListener('click', function(e) {
+                    finalizeAll();
+                    const selectedEls = getSelectedElements();
+                    if (selectedEls.length > 0) {
+                        // コピー
+                        appClipboardData = selectedEls.map(el => {
+                            return {
+                                type: el.classList.contains('char-item') ? 'char' : 'space',
+                                src: el.querySelector('img') ? el.querySelector('img').src : null
+                            };
+                        });
+                        // 削除してカーソルを戻す
+                        replaceSelectionWithCursor();
+                    }
+                });
+            }
+
+            // 右下「貼り付け」ボタン連動
+            if (btnPaste) {
+                btnPaste.addEventListener('click', function(e) {
+                    finalizeAll();
+                    const selectedEls = getSelectedElements();
+
+                    if (appClipboardData.length > 0) {
+                        // 範囲選択があれば先に上書き消去
+                        if (selectedEls.length > 0) {
+                            replaceSelectionWithCursor();
+                        }
+
+                        // コピーされているデータを現在のカーソル位置に順番に挿入
+                        appClipboardData.forEach(data => {
+                            if (data.type === 'char') {
+                                const charItem = document.createElement('div');
+                                charItem.className = 'char-item';
+                                const img = document.createElement('img');
+                                img.src = data.src;
+                                charItem.appendChild(img);
+                                currentLine.insertBefore(charItem, cursor);
+                            } else if (data.type === 'space') {
+                                const spaceChar = document.createElement('span');
+                                spaceChar.className = 'space-char';
+                                currentLine.insertBefore(spaceChar, cursor);
+                            }
+                        });
+                    }
+                });
+            }
         })();
         // === ここまで追加：キーボードイベント制御（コピペ対応版） ===
     </script>
