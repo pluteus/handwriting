@@ -453,4 +453,1006 @@
             <span>設定</span>
         </button>
         <button class="toolbar-btn" id="btnFullscreen">
-            <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4
+            <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            <span>最大化</span>
+        </button>
+    </div>
+
+    <button class="exit-fullscreen" id="btnExitFullscreen">✕</button>
+
+    <div class="settings-overlay" id="settingsOverlay">
+        <div class="settings-panel">
+            <div class="settings-title">設定</div>
+            <div class="settings-row">
+                <span class="settings-label">自動確定時間</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingAutoTime" value="1" min="1" max="30">
+                    <span class="settings-unit">秒</span>
+                </div>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">等幅フォント</span>
+                <label class="settings-toggle">
+                    <input type="checkbox" id="settingMonoWidth">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">プロポーショナル余白</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingPropMargin" value="1" min="0" max="10">
+                    <span class="settings-unit">px</span>
+                </div>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">文字解像度</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingCharRes" value="64" min="32" max="256" step="32">
+                    <span class="settings-unit">px</span>
+                </div>
+            </div>
+            <button class="settings-close" id="btnCloseSettings">閉じる</button>
+        </div>
+    </div>
+
+    <div class="display-area" id="displayArea">
+        <div class="zoom-container" id="zoomContainer">
+            <div class="line" id="currentLine">
+                <span class="cursor" id="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="resizer" id="resizer"></div>
+
+    <div class="input-area">
+        <div class="canvas-wrapper active" id="wrapper1">
+            <span class="canvas-label">左</span>
+            <canvas id="canvas1" width="320" height="320"></canvas>
+        </div>
+
+        <div class="canvas-wrapper" id="wrapper2">
+            <span class="canvas-label">右</span>
+            <canvas id="canvas2" width="320" height="320"></canvas>
+        </div>
+
+        <div class="buttons">
+            <button class="btn btn-backspace" id="btnBackspace">⌫</button>
+            <button class="btn btn-space" id="btnSpace">空白</button>
+            <button class="btn btn-enter" id="btnEnter">改行</button>
+        </div>
+        <div class="buttons">
+            <button class="btn" id="btnCopy">コピー</button>
+            <button class="btn" id="btnCut">切取</button>
+            <button class="btn" id="btnPaste">貼付</button>
+        </div>
+    </div>
+
+    <div class="guide-text">
+        一方に書き、もう一方に書くと確定 / <span id="autoTimeDisplay">1</span>秒で自動確定
+    </div>
+
+    <script>
+        const canvas1 = document.getElementById('canvas1');
+        const canvas2 = document.getElementById('canvas2');
+        const ctx1 = canvas1.getContext('2d');
+        const ctx2 = canvas2.getContext('2d');
+        const wrapper1 = document.getElementById('wrapper1');
+        const wrapper2 = document.getElementById('wrapper2');
+        const displayArea = document.getElementById('displayArea');
+        const resizer = document.getElementById('resizer');
+
+        let currentLine = document.getElementById('currentLine');
+        let cursor = document.getElementById('cursor');
+
+        let hasDrawing1 = false;
+        let hasDrawing2 = false;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let currentCanvas = null;
+        let currentCtx = null;
+        let autoFinalizeTimer = null;
+        let AUTO_FINALIZE_DELAY = 1000;
+        let MONO_WIDTH = false;
+        let PROP_MARGIN = 1;
+        let CHAR_RESOLUTION = 64;
+
+        ctx1.lineCap = 'round';
+        ctx1.lineJoin = 'round';
+        ctx1.lineWidth = 6;
+        ctx1.strokeStyle = '#000000';
+
+        ctx2.lineCap = 'round';
+        ctx2.lineJoin = 'round';
+        ctx2.lineWidth = 6;
+        ctx2.strokeStyle = '#000000';
+
+        /* === 境界線ドラッグ移動ロジックの追加 === */
+        let isResizing = false;
+        resizer.addEventListener('mousedown', initResize);
+        resizer.addEventListener('touchstart', initResize, {passive: true});
+
+        function initResize(e) {
+            isResizing = true;
+            window.addEventListener('mousemove', startResize);
+            window.addEventListener('mouseup', stopResize);
+            window.addEventListener('touchmove', startResize, {passive: false});
+            window.addEventListener('touchend', stopResize);
+        }
+
+        function startResize(e) {
+            if (!isResizing) return;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            let offsetTop = displayArea.getBoundingClientRect().top;
+            let newHeight = clientY - offsetTop;
+            if (newHeight > 60 && newHeight < window.innerHeight - 150) {
+                displayArea.style.height = newHeight + 'px';
+            }
+            if (e.cancelable) e.preventDefault();
+        }
+
+        function stopResize() {
+            isResizing = false;
+            window.removeEventListener('mousemove', startResize);
+            window.removeEventListener('mouseup', stopResize);
+            window.removeEventListener('touchmove', startResize);
+            window.removeEventListener('touchend', stopResize);
+        }
+
+        function getPos(canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        function startAutoFinalizeTimer(canvasNum) {
+            clearAutoFinalizeTimer();
+            autoFinalizeTimer = setTimeout(function() {
+                if (canvasNum === 1 && hasDrawing1) {
+                    finalizeCharacter(1);
+                } else if (canvasNum === 2 && hasDrawing2) {
+                    finalizeCharacter(2);
+                }
+            }, AUTO_FINALIZE_DELAY);
+        }
+
+        function clearAutoFinalizeTimer() {
+            if (autoFinalizeTimer) {
+                clearTimeout(autoFinalizeTimer);
+                autoFinalizeTimer = null;
+            }
+        }
+
+        function startDraw(canvas, ctx, e) {
+            isDrawing = true;
+            currentCanvas = canvas;
+            currentCtx = ctx;
+            const pos = getPos(canvas, e);
+            lastX = pos.x;
+            lastY = pos.y;
+
+            if (canvas === canvas1) hasDrawing1 = true;
+            else hasDrawing2 = true;
+
+            if (canvas === canvas1 && hasDrawing2) {
+                finalizeCharacter(2);
+            } else if (canvas === canvas2 && hasDrawing1) {
+                finalizeCharacter(1);
+            }
+
+            startAutoFinalizeTimer(canvas === canvas1 ? 1 : 2);
+            updateActiveState();
+        }
+
+        function doDraw(e) {
+            if (!isDrawing || !currentCanvas || !currentCtx) return;
+            const pos = getPos(currentCanvas, e);
+
+            currentCtx.beginPath();
+            currentCtx.moveTo(lastX, lastY);
+            currentCtx.lineTo(pos.x, pos.y);
+            currentCtx.stroke();
+
+            lastX = pos.x;
+            lastY = pos.y;
+
+            if (currentCanvas === canvas1 && hasDrawing1) {
+                startAutoFinalizeTimer(1);
+            } else if (currentCanvas === canvas2 && hasDrawing2) {
+                startAutoFinalizeTimer(2);
+            }
+        }
+
+        function endDraw() {
+            isDrawing = false;
+            currentCanvas = null;
+            currentCtx = null;
+        }
+
+        function finalizeCharacter(canvasNum) {
+            clearAutoFinalizeTimer();
+
+            const sourceCanvas = canvasNum === 1 ? canvas1 : canvas2;
+            const sourceCtx = canvasNum === 1 ? ctx1 : ctx2;
+
+            const trimmed = trimCanvas(sourceCanvas);
+            if (!trimmed) {
+                if (canvasNum === 1) hasDrawing1 = false;
+                else hasDrawing2 = false;
+                updateActiveState();
+                return;
+            }
+
+            const srcSize = sourceCanvas.width; 
+            const charRes = CHAR_RESOLUTION;  
+            const displayH = 32;              
+
+            const srcPixels = sourceCtx.getImageData(0, 0, srcSize, srcSize);
+            const sd = srcPixels.data;
+            const ALPHA_THRESHOLD = 32;
+            let srcMinX = srcSize, srcMaxX = 0;
+            for (let y = 0; y < srcSize; y++) {
+                for (let x = 0; x < srcSize; x++) {
+                    const alpha = sd[(y * srcSize + x) * 4 + 3];
+                    if (alpha > ALPHA_THRESHOLD) {
+                        if (x < srcMinX) srcMinX = x;
+                        if (x > srcMaxX) srcMaxX = x;
+                    }
+                }
+            }
+
+            if (srcMaxX === 0) {
+                if (canvasNum === 1) hasDrawing1 = false;
+                else hasDrawing2 = false;
+                updateActiveState();
+                return;
+            }
+
+            let finalCanvas;
+            let finalImgW; 
+            let displayW;  
+
+            if (!MONO_WIDTH) {
+                const scale = charRes / srcSize;
+                const displayScale = displayH / srcSize; 
+                const srcMargin = Math.round(PROP_MARGIN / displayScale);
+
+                const cropSrcX = Math.max(0, srcMinX - srcMargin);
+                const cropSrcW = Math.min(srcSize - cropSrcX, srcMaxX - srcMinX + 1 + srcMargin * 2);
+                const cropSrcH = srcSize;
+
+                finalImgW = Math.max(1, Math.round(cropSrcW * scale));
+                displayW  = Math.max(1, Math.round(cropSrcW * displayScale + PROP_MARGIN * 2));
+
+                finalCanvas = document.createElement('canvas');
+                finalCanvas.width = finalImgW;
+                finalCanvas.height = charRes;
+                const finalCtx = finalCanvas.getContext('2d');
+                finalCtx.clearRect(0, 0, finalImgW, charRes);
+                finalCtx.drawImage(
+                    sourceCanvas,
+                    cropSrcX, 0, cropSrcW, cropSrcH,
+                    0, 0, finalImgW, charRes
+                );
+            } else {
+                finalCanvas = document.createElement('canvas');
+                finalCanvas.width = charRes;
+                finalCanvas.height = charRes;
+                const finalCtx = finalCanvas.getContext('2d');
+                finalCtx.clearRect(0, 0, charRes, charRes);
+                finalCtx.drawImage(sourceCanvas, 0, 0, srcSize, srcSize, 0, 0, charRes, charRes);
+                finalImgW = charRes;
+                displayW  = displayH;
+            }
+
+            const imgData = finalCanvas.toDataURL('image/png');
+
+            replaceSelectionWithCursor();
+
+            const charDiv = document.createElement('span');
+            charDiv.className = 'char-item';
+            charDiv.style.width = displayW + 'px';
+            charDiv.style.height = displayH + 'px';
+
+            const img = document.createElement('img');
+            img.src = imgData;
+            img.alt = '手書き文字';
+            charDiv.appendChild(img);
+
+            currentLine.insertBefore(charDiv, cursor);
+
+            sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+
+            if (canvasNum === 1) hasDrawing1 = false;
+            else hasDrawing2 = false;
+
+            displayArea.scrollTop = displayArea.scrollHeight;
+            updateActiveState();
+        }
+
+        function finalizeAll() {
+            if (hasDrawing1) finalizeCharacter(1);
+            if (hasDrawing2) finalizeCharacter(2);
+        }
+
+        /* trimCanvas のバグを修正 */
+        function trimCanvas(canvas) {
+            const ctx = canvas.getContext('2d');
+            const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = pixels.data;
+
+            let minX = canvas.width, minY = canvas.height;
+            let maxX = 0, maxY = 0;
+            let hasPixel = false;
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const alpha = data[(y * canvas.width + x) * 4 + 3];
+                    if (alpha > 0) {
+                        hasPixel = true;
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            if (!hasPixel) return null;
+
+            const margin = MONO_WIDTH ? 0 : PROP_MARGIN;
+
+            return {
+                x: Math.max(0, minX - margin),
+                y: Math.max(0, minY - margin),
+                w: Math.min(canvas.width - minX + margin * 2, maxX - minX + margin * 2),
+                h: Math.min(canvas.height - minY + margin * 2, maxY - minY + margin * 2)
+            };
+        }
+
+        function updateActiveState() {
+            if (hasDrawing1 && !hasDrawing2) {
+                wrapper1.classList.add('active');
+                wrapper1.classList.remove('inactive');
+                wrapper2.classList.remove('active');
+                wrapper2.classList.remove('inactive');
+            } else if (!hasDrawing1 && hasDrawing2) {
+                wrapper1.classList.remove('active');
+                wrapper1.classList.remove('inactive');
+                wrapper2.classList.add('active');
+                wrapper2.classList.remove('inactive');
+            } else if (hasDrawing1 && hasDrawing2) {
+                wrapper1.classList.remove('active');
+                wrapper2.classList.remove('active');
+            } else {
+                wrapper1.classList.add('active');
+                wrapper1.classList.remove('inactive');
+                wrapper2.classList.remove('active');
+                wrapper2.classList.remove('inactive');
+            }
+        }
+
+        function moveCursorToNearestPosition(lineElement, tapX) {
+            document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
+            
+            const oldCursor = document.getElementById('cursor');
+            if (oldCursor) oldCursor.remove();
+
+            const newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.id = 'cursor';
+
+            const children = Array.from(lineElement.children).filter(child => !child.classList.contains('cursor'));
+
+            if (children.length === 0) {
+                lineElement.appendChild(newCursor);
+            } else {
+                let closestIndex = 0;
+                let minDistance = Infinity;
+
+                for (let i = 0; i <= children.length; i++) {
+                    let refX;
+                    if (i === 0) {
+                        refX = children[0].getBoundingClientRect().left;
+                    } else if (i === children.length) {
+                        refX = children[children.length - 1].getBoundingClientRect().right;
+                    } else {
+                        const leftRect = children[i - 1].getBoundingClientRect();
+                        const rightRect = children[i].getBoundingClientRect();
+                        refX = (leftRect.right + rightRect.left) / 2;
+                    }
+
+                    const distance = Math.abs(tapX - refX);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestIndex = i;
+                    }
+                }
+
+                if (closestIndex === 0) {
+                    lineElement.insertBefore(newCursor, children[0]);
+                } else if (closestIndex >= children.length) {
+                    lineElement.appendChild(newCursor);
+                } else {
+                    lineElement.insertBefore(newCursor, children[closestIndex]);
+                }
+            }
+
+            if (currentLine) currentLine.id = '';
+            lineElement.id = 'currentLine';
+            currentLine = lineElement;
+            cursor = newCursor;
+        }
+
+        function setupLineTapEvents() {
+            const lines = document.querySelectorAll('.line');
+            lines.forEach(line => {
+                line.onclick = function(e) {
+                    if (e.target.classList.contains('char-item') || e.target.closest('.char-item') || e.target.classList.contains('space-char')) return;
+                    const tapX = e.clientX;
+                    moveCursorToNearestPosition(line, tapX);
+                };
+            });
+        }
+        setupLineTapEvents();
+
+        // === 手書きキャンバス用 描画イベント群の登録 ===
+        if (window.PointerEvent) {
+            canvas1.addEventListener('pointerdown', function(e) { e.preventDefault(); canvas1.setPointerCapture(e.pointerId); startDraw(canvas1, ctx1, e); });
+            canvas2.addEventListener('pointerdown', function(e) { e.preventDefault(); canvas2.setPointerCapture(e.pointerId); startDraw(canvas2, ctx2, e); });
+            canvas1.addEventListener('pointermove', function(e) { if (isDrawing && currentCanvas === canvas1) { e.preventDefault(); doDraw(e); } });
+            canvas2.addEventListener('pointermove', function(e) { if (isDrawing && currentCanvas === canvas2) { e.preventDefault(); doDraw(e); } });
+            canvas1.addEventListener('pointerup', function(e) { e.preventDefault(); endDraw(); });
+            canvas2.addEventListener('pointerup', function(e) { e.preventDefault(); endDraw(); });
+            canvas1.addEventListener('pointercancel', function(e) { e.preventDefault(); endDraw(); });
+            canvas2.addEventListener('pointercancel', function(e) { e.preventDefault(); endDraw(); });
+        } else {
+            canvas1.addEventListener('touchstart', function(e) { e.preventDefault(); startDraw(canvas1, ctx1, e); }, {passive: false});
+            canvas1.addEventListener('touchmove', function(e) { e.preventDefault(); doDraw(e); }, {passive: false});
+            canvas1.addEventListener('touchend', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+            canvas1.addEventListener('touchcancel', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+            canvas2.addEventListener('touchstart', function(e) { e.preventDefault(); startDraw(canvas2, ctx2, e); }, {passive: false});
+            canvas2.addEventListener('touchmove', function(e) { e.preventDefault(); doDraw(e); }, {passive: false});
+            canvas2.addEventListener('touchend', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+            canvas2.addEventListener('touchcancel', function(e) { e.preventDefault(); endDraw(); }, {passive: false});
+        }
+        canvas1.addEventListener('mousedown', function(e) { startDraw(canvas1, ctx1, e); });
+        canvas2.addEventListener('mousedown', function(e) { startDraw(canvas2, ctx2, e); });
+        window.addEventListener('mousemove', function(e) { doDraw(e); });
+        window.addEventListener('mouseup', function(e) { endDraw(); });
+
+
+        // === コピペ基本ロジック関数 ===
+        function replaceSelectionWithCursor() {
+            const sel = getSelectedElements();
+            if (sel.length === 0) return false;
+            const firstSel = sel[0];
+            const parentLine = firstSel.parentNode;
+            if (cursor && cursor.parentNode) {
+                parentLine.insertBefore(cursor, firstSel);
+            }
+            currentLine = parentLine;
+            sel.forEach(el => el.remove());
+            if (cursor) cursor.classList.remove('hidden');
+            return true;
+        }
+
+        let internalClipboard = [];
+
+        function getSelectedElements() {
+            const all = Array.from(document.querySelectorAll('#zoomContainer .char-item, #zoomContainer .space-char'));
+            return all.filter(el => el.classList.contains('selected'));
+        }
+
+        function cloneCharEl(el) {
+            const span = document.createElement('span');
+            span.className = el.className.replace(' selected', '');
+            span.style.cssText = el.style.cssText;
+            if (el.classList.contains('char-item')) {
+                const img = document.createElement('img');
+                img.src = el.querySelector('img').src;
+                img.alt = '手書き文字';
+                span.appendChild(img);
+            }
+            return span;
+        }
+
+        function copySelectedToClipboard() {
+            const sel = getSelectedElements();
+            if (sel.length === 0) return false;
+            const groups = [];
+            let currentGroup = [];
+            let prevLine = null;
+            for (const el of sel) {
+                const line = el.parentNode;
+                if (prevLine && line !== prevLine) {
+                    groups.push(currentGroup);
+                    currentGroup = [];
+                }
+                currentGroup.push(cloneCharEl(el));
+                prevLine = line;
+            }
+            if (currentGroup.length > 0) groups.push(currentGroup);
+            internalClipboard = groups;
+            return true;
+        }
+
+        function pasteFromClipboard() {
+            if (internalClipboard.length === 0) return;
+            for (let gi = 0; gi < internalClipboard.length; gi++) {
+                const group = internalClipboard[gi];
+                if (gi > 0) {
+                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+                    const allChildren = Array.from(currentLine.children);
+                    const elementsToMove = [];
+                    for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+                        elementsToMove.push(allChildren[i]);
+                    }
+                    const newLine = document.createElement('div');
+                    newLine.className = 'line';
+                    const newCursor = document.createElement('span');
+                    newCursor.className = 'cursor';
+                    newCursor.id = 'cursor';
+                    newLine.appendChild(newCursor);
+                    elementsToMove.forEach(el => newLine.appendChild(el));
+                    currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+                    const oldCursor = currentLine.querySelector('.cursor');
+                    if (oldCursor) oldCursor.remove();
+                    currentLine.id = '';
+                    newLine.id = 'currentLine';
+                    currentLine = newLine;
+                    cursor = newCursor;
+                    setupLineTapEvents();
+                }
+                for (const el of group) {
+                    currentLine.insertBefore(cloneCharEl(el), cursor);
+                }
+            }
+        }
+
+        // === バックスペース・空白・改行ボタンイベント ===
+        document.getElementById('btnBackspace').addEventListener('click', function() {
+            finalizeAll();
+            const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+            if (selected.length > 0) {
+                selected.forEach(el => el.remove());
+            } else {
+                const chars = currentLine.querySelectorAll('.char-item, .space-char');
+                if (chars.length > 0) {
+                    const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+                    if (cursorIndex > 0) {
+                        currentLine.children[cursorIndex - 1].remove();
+                    }
+                }
+            }
+        });
+
+        document.getElementById('btnSpace').addEventListener('click', function() {
+            finalizeAll();
+            replaceSelectionWithCursor();
+            const space = document.createElement('span');
+            space.className = 'space-char';
+            currentLine.insertBefore(space, cursor);
+        });
+
+        document.getElementById('btnEnter').addEventListener('click', function() {
+            finalizeAll();
+            replaceSelectionWithCursor();
+            const cursorIndex = Array.from(currentLine.children).indexOf(cursor);
+            const allChildren = Array.from(currentLine.children);
+            const elementsToMove = [];
+            for (let i = cursorIndex + 1; i < allChildren.length; i++) {
+                elementsToMove.push(allChildren[i]);
+            }
+            const newLine = document.createElement('div');
+            newLine.className = 'line';
+            const newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.id = 'cursor';
+            newLine.appendChild(newCursor);
+            elementsToMove.forEach(el => newLine.appendChild(el));
+            currentLine.parentNode.insertBefore(newLine, currentLine.nextSibling);
+            const oldCursor = currentLine.querySelector('.cursor');
+            if (oldCursor) oldCursor.remove();
+            currentLine.id = '';
+            newLine.id = 'currentLine';
+            currentLine = newLine;
+            cursor = newCursor;
+            setupLineTapEvents();
+            displayArea.scrollTop = displayArea.scrollHeight;
+        });
+
+
+        // === 表示エリア（displayArea）のタッチ＆マウス選択統合制御 ===
+        (function() {
+            const zoomContainer = document.getElementById('zoomContainer');
+            let currentScale = 1.0;
+            const MIN_SCALE = 0.5;
+            const MAX_SCALE = 4.0;
+            const LONG_PRESS_MS = 500; 
+
+            let mode = 'idle'; 
+            let mouseDragged = false; 
+
+            let selectStartEl = null;
+            let selectEndEl   = null;
+
+            let touchStartX = 0, touchStartY = 0;
+            let longPressTimer = null;
+
+            let mouseLongPressTimer = null;
+            let mouseStartX = 0, mouseStartY = 0;
+            let isMouseSelectionReady = false; 
+
+            let scrollStartX = 0, scrollStartY = 0;
+            let scrollOriginLeft = 0, scrollOriginTop = 0;
+
+            let pinchStartDist = 0;
+            let pinchStartScale = 1.0;
+
+            function getTouchDist(t) {
+                const dx = t[0].clientX - t[1].clientX;
+                const dy = t[0].clientY - t[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            function charAtPoint(x, y) {
+                const els = zoomContainer.querySelectorAll('.char-item, .space-char');
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
+                }
+                return null;
+            }
+
+            function updateSelection(startEl, endEl) {
+                document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
+                if (!startEl || !endEl) return;
+                const all = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                const si = all.indexOf(startEl);
+                const ei = all.indexOf(endEl);
+                if (si < 0 || ei < 0) return;
+                const lo = Math.min(si, ei), hi = Math.max(si, ei);
+                for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
+                if (cursor) cursor.classList.add('hidden');
+            }
+
+            function clearSelection() {
+                document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
+                if (cursor) cursor.classList.remove('hidden');
+            }
+
+            function cancelLongPress() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+            function cancelMouseLongPress() { if (mouseLongPressTimer) { clearTimeout(mouseLongPressTimer); mouseLongPressTimer = null; } }
+
+            function moveCursorToPoint(x, y) {
+                const lines = Array.from(zoomContainer.querySelectorAll('.line'));
+                let targetLine = null;
+                for (const line of lines) {
+                    const r = line.getBoundingClientRect();
+                    if (y >= r.top && y <= r.bottom) { targetLine = line; break; }
+                }
+                if (targetLine && targetLine.querySelectorAll('.char-item, .space-char').length === 0) {
+                    moveCursorToNearestPosition(targetLine, x);
+                    return;
+                }
+                const els = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                if (els.length === 0) {
+                    if (lines.length > 0) moveCursorToNearestPosition(lines[0], x);
+                    return;
+                }
+                let nearest = null, nearestDist = Infinity;
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    const cx = (r.left + r.right) / 2;
+                    const cy = (r.top + r.bottom) / 2;
+                    const dist = Math.abs(cx - x) + Math.abs(cy - y) * 2;
+                    if (dist < nearestDist) { nearestDist = dist; nearest = el; }
+                }
+                if (!nearest) return;
+                const r = nearest.getBoundingClientRect();
+                const cx = (r.left + r.right) / 2;
+                if (x < cx) {
+                    nearest.parentNode.insertBefore(cursor, nearest);
+                } else {
+                    nearest.parentNode.insertBefore(cursor, nearest.nextSibling);
+                }
+                currentLine = cursor.parentNode;
+                lines.forEach(l => l.id = '');
+                currentLine.id = 'currentLine';
+            }
+
+            function forceEndMouseSelection() {
+                cancelMouseLongPress();
+                if (mode === 'mouse_selecting' || isMouseSelectionReady || selectStartEl) {
+                    mode = 'idle'; isMouseSelectionReady = false; selectStartEl = null; selectEndEl = null;
+                    return true; 
+                }
+                return false;
+            }
+
+            displayArea.addEventListener('mousedown', function(e) {
+                if (e.button !== 0) return;
+                if (e.target.classList.contains('char-item') || e.target.closest('.char-item') || e.target.classList.contains('space-char')) return;
+                if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
+                const startEl = charAtPoint(e.clientX, e.clientY);
+                if (startEl) {
+                    mouseStartX = e.clientX; mouseStartY = e.clientY; mouseDragged = false; isMouseSelectionReady = false; 
+                    selectStartEl = startEl; selectEndEl = startEl;
+                    cancelMouseLongPress();
+                    mouseLongPressTimer = setTimeout(function() {
+                        isMouseSelectionReady = true; mode = 'mouse_selecting'; clearSelection();
+                        selectStartEl.classList.add('selected'); if (cursor) cursor.classList.add('hidden');
+                    }, LONG_PRESS_MS);
+                }
+            });
+
+            window.addEventListener('mousemove', function(e) {
+                if (!selectStartEl) return;
+                const dx = e.clientX - mouseStartX; const dy = e.clientY - mouseStartY;
+                const moveDistance = Math.sqrt(dx * dx + dy * dy);
+                if (!isMouseSelectionReady && moveDistance > 8) {
+                    cancelMouseLongPress(); isMouseSelectionReady = true; mode = 'mouse_selecting'; clearSelection();
+                    selectStartEl.classList.add('selected'); if (cursor) cursor.classList.add('hidden');
+                }
+                if (mode === 'mouse_selecting') {
+                    mouseDragged = true; 
+                    const el = charAtPoint(e.clientX, e.clientY);
+                    if (el && el !== selectEndEl) { selectEndEl = el; updateSelection(selectStartEl, selectEndEl); }
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            window.addEventListener('mouseup', function(e) {
+                if (e.button !== 0) return;
+                const wasSelecting = forceEndMouseSelection();
+                if (wasSelecting && mouseDragged) { e.preventDefault(); e.stopPropagation(); return; }
+                if (!mouseDragged && !wasSelecting && mouseStartX !== 0) {
+                    if (charAtPoint(mouseStartX, mouseStartY) || e.target.closest('.line')) {
+                        clearSelection(); moveCursorToPoint(mouseStartX, mouseStartY);
+                    }
+                }
+                mouseStartX = 0; mouseStartY = 0; mouseDragged = false;
+            }, true); 
+
+            displayArea.addEventListener('dragstart', function(e) { if (selectStartEl) e.preventDefault(); });
+            window.addEventListener('blur', function() { forceEndMouseSelection(); mouseDragged = false; });
+            document.addEventListener('mouseleave', function() { forceEndMouseSelection(); mouseDragged = false; });
+
+            displayArea.addEventListener('click', function(e) {
+                if (mouseDragged) { mouseDragged = false; e.stopPropagation(); e.preventDefault(); return; }
+                const selected = document.querySelectorAll('.char-item.selected, .space-char.selected');
+                if (selected.length > 0 && !e.target.closest('.char-item, .space-char')) { clearSelection(); mode = 'idle'; }
+            }, true); 
+
+            displayArea.addEventListener('touchstart', function(e) {
+                if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) return;
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    touchStartX = t.clientX; touchStartY = t.clientY;
+                    scrollStartX = t.clientX; scrollStartY = t.clientY;
+                    scrollOriginLeft = displayArea.scrollLeft; scrollOriginTop  = displayArea.scrollTop;
+                    mode = 'longpress_pending'; cancelLongPress();
+                    longPressTimer = setTimeout(function() {
+                        mode = 'selecting';
+                        selectStartEl = charAtPoint(touchStartX, touchStartY); selectEndEl = selectStartEl;
+                        clearSelection(); if (selectStartEl) selectStartEl.classList.add('selected');
+                        if (cursor) cursor.classList.add('hidden');
+                    }, LONG_PRESS_MS);
+                } else if (e.touches.length === 2) {
+                    cancelLongPress(); mode = 'pinching';
+                    const dist = getTouchDist(e.touches);
+                    pinchStartDist  = dist; pinchStartScale = currentScale;
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    scrollStartX = mx; scrollStartY = my;
+                    scrollOriginLeft = displayArea.scrollLeft; scrollOriginTop  = displayArea.scrollTop;
+                    clearSelection();
+                }
+                if (mode !== 'idle' && mode !== 'mouse_selecting') e.preventDefault();
+            }, { passive: false });
+
+            displayArea.addEventListener('touchmove', function(e) {
+                if (mode === 'idle' || mode === 'mouse_selecting') return;
+                e.preventDefault();
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    const dx = t.clientX - touchStartX; const dy = t.clientY - touchStartY;
+                    const moved = Math.sqrt(dx*dx + dy*dy);
+                    if (mode === 'longpress_pending' && moved > 8) { cancelLongPress(); mode = 'scrolling_1finger'; }
+                    if (mode === 'scrolling_1finger') {
+                        displayArea.scrollLeft = scrollOriginLeft - (t.clientX - scrollStartX);
+                        displayArea.scrollTop  = scrollOriginTop - (t.clientY - scrollStartY);
+                    } else if (mode === 'selecting') {
+                        const el = charAtPoint(t.clientX, t.clientY);
+                        if (el && el !== selectEndEl) { selectEndEl = el; updateSelection(selectStartEl, selectEndEl); }
+                    }
+                } else if (e.touches.length === 2) {
+                    const dist = getTouchDist(e.touches);
+                    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    let newScale = pinchStartScale * (dist / pinchStartDist);
+                    newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
+                    currentScale = newScale;
+                    zoomContainer.style.transform = 'scale(' + currentScale + ')';
+                    displayArea.scrollLeft = scrollOriginLeft - (mx - scrollStartX);
+                    displayArea.scrollTop  = scrollOriginTop  - (my - scrollStartY);
+                }
+            }, { passive: false });
+
+            displayArea.addEventListener('touchend', function(e) {
+                if (e.touches.length === 0) {
+                    if (mode === 'longpress_pending') {
+                        cancelLongPress(); moveCursorToPoint(touchStartX, touchStartY);
+                        clearSelection(); if (cursor) cursor.classList.remove('hidden');
+                    }
+                    if (mode !== 'selecting') mode = 'idle';
+                }
+            }, { passive: true });
+        })();
+
+
+        // === 画面右下ボタン ＆ キーボードショートカット完全同期統合ロジック ===
+        function executeCopyAction() { finalizeAll(); copySelectedToClipboard(); }
+        function executeCutAction() { finalizeAll(); if (!copySelectedToClipboard()) return; getSelectedElements().forEach(el => el.remove()); }
+        function executePasteAction() { finalizeAll(); if (internalClipboard.length === 0) return; replaceSelectionWithCursor(); pasteFromClipboard(); }
+
+        document.querySelectorAll('.btn').forEach(function(btn) {
+            let lastTap = 0;
+            btn.addEventListener('touchend', function(e) {
+                const now = Date.now();
+                const isDoubleTap = (now - lastTap < 350);
+                lastTap = now;
+                if (isDoubleTap) e.preventDefault();
+
+                if (btn.id === 'btnCopy') { e.preventDefault(); e.stopPropagation(); executeCopyAction(); }
+                else if (btn.id === 'btnCut') { e.preventDefault(); e.stopPropagation(); executeCutAction(); }
+                else if (btn.id === 'btnPaste') { e.preventDefault(); e.stopPropagation(); executePasteAction(); }
+            }, { passive: false });
+
+            btn.addEventListener('click', function(e) {
+                if (btn.id === 'btnCopy') { e.preventDefault(); e.stopPropagation(); executeCopyAction(); }
+                else if (btn.id === 'btnCut') { e.preventDefault(); e.stopPropagation(); executeCutAction(); }
+                else if (btn.id === 'btnPaste') { e.preventDefault(); e.stopPropagation(); executePasteAction(); }
+            });
+        });
+
+        window.addEventListener('keydown', function(e) {
+            const isCtrl = e.ctrlKey || e.metaKey;
+            if (!isCtrl) return;
+            const key = e.key.toLowerCase();
+            if (key === 'c') { e.preventDefault(); executeCopyAction(); }
+            else if (key === 'x') { e.preventDefault(); executeCutAction(); }
+            else if (key === 'v') { e.preventDefault(); executePasteAction(); }
+        });
+
+
+        // === 設定画面の制御（その他の既存UIイベント群） ===
+        const btnSettings = document.getElementById('btnSettings');
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const btnCloseSettings = document.getElementById('btnCloseSettings');
+        const settingAutoTime = document.getElementById('settingAutoTime');
+        const autoTimeDisplay = document.getElementById('autoTimeDisplay');
+        const settingMonoWidth = document.getElementById('settingMonoWidth');
+        const settingPropMargin = document.getElementById('settingPropMargin');
+        const settingCharRes = document.getElementById('settingCharRes');
+
+        btnSettings.addEventListener('click', function() { settingsOverlay.classList.add('show'); });
+        btnCloseSettings.addEventListener('click', function() { settingsOverlay.classList.remove('show'); });
+        settingsOverlay.addEventListener('click', function(e) { if (e.target === settingsOverlay) settingsOverlay.classList.remove('show'); });
+
+        settingAutoTime.addEventListener('input', function() {
+            let val = parseInt(settingAutoTime.value);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 30) val = 30;
+            AUTO_FINALIZE_DELAY = val * 1000;
+            autoTimeDisplay.textContent = val;
+        });
+
+        settingMonoWidth.addEventListener('change', function() { MONO_WIDTH = settingMonoWidth.checked; });
+        settingPropMargin.addEventListener('input', function() {
+            let val = parseInt(settingPropMargin.value);
+            if (isNaN(val) || val < 0) val = 0;
+            PROP_MARGIN = val;
+        });
+        settingCharRes.addEventListener('input', function() {
+            let val = parseInt(settingCharRes.value);
+            if (isNaN(val) || val < 32) val = 32;
+            CHAR_RESOLUTION = val;
+        });
+
+        // 保存・共有・フルスクリーンの制御
+        document.getElementById('btnSaveImage').addEventListener('click', function() {
+            finalizeAll();
+            const originalCursor = document.getElementById('cursor');
+            let cursorParent = null, cursorNextSibling = null;
+            if (originalCursor) {
+                cursorParent = originalCursor.parentNode;
+                cursorNextSibling = originalCursor.nextSibling;
+                originalCursor.remove();
+            }
+            const lines = document.querySelectorAll('#zoomContainer .line');
+            if (lines.length === 0) { alert('保存する文字がありません。'); return; }
+            let totalW = 0, totalH = 0;
+            lines.forEach(line => {
+                let lineW = 0;
+                line.querySelectorAll('.char-item, .space-char').forEach(el => { lineW += el.offsetWidth; });
+                if (lineW > totalW) totalW = lineW;
+                totalH += 40; 
+            });
+            if (totalW === 0) totalW = 100;
+            const canvas = document.createElement('canvas');
+            canvas.width = totalW + 40; canvas.height = totalH + 40;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            let currentY = 20;
+            let loadedImages = 0, totalImages = document.querySelectorAll('#zoomContainer .char-item img').length;
+
+            function drawAll() {
+                lines.forEach(line => {
+                    let currentX = 20;
+                    line.childNodes.forEach(node => {
+                        if (node.classList && node.classList.contains('char-item')) {
+                            const img = node.querySelector('img');
+                            const w = node.offsetWidth; const h = 32;
+                            ctx.drawImage(img, currentX, currentY + 4, w, h);
+                            currentX += w;
+                        } else if (node.classList && node.classList.contains('space-char')) {
+                            currentX += node.offsetWidth;
+                        }
+                    });
+                    currentY += 40;
+                });
+                if (originalCursor && cursorParent) { cursorParent.insertBefore(originalCursor, cursorNextSibling); }
+                const link = document.createElement('a');
+                link.download = '走り書きメモ_' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+                link.href = canvas.toDataURL('image/png'); link.click();
+            }
+
+            if (totalImages === 0) { drawAll(); } else {
+                document.querySelectorAll('#zoomContainer .char-item img').forEach(img => {
+                    if (img.complete) { loadedImages++; if (loadedImages === totalImages) drawAll(); }
+                    else { img.addEventListener('load', function() { loadedImages++; if (loadedImages === totalImages) drawAll(); }); }
+                });
+            }
+        });
+
+        document.getElementById('btnShareKeep').addEventListener('click', function() {
+            finalizeAll();
+            const lines = document.querySelectorAll('#zoomContainer .line');
+            if (lines.length === 0) { alert('共有する文字がありません。'); return; }
+            let text = "";
+            lines.forEach((line, index) => {
+                if (index > 0) text += "\n";
+                line.childNodes.forEach(node => {
+                    if (node.classList && node.classList.contains('char-item')) text += "■";
+                    else if (node.classList && node.classList.contains('space-char')) text += " ";
+                });
+            });
+            const url = "https://keep.google.com/#create?text=" + encodeURIComponent(text);
+            window.open(url, '_blank');
+        });
+
+        const btnFullscreen = document.getElementById('btnFullscreen');
+        const btnExitFullscreen = document.getElementById('btnExitFullscreen');
+        btnFullscreen.addEventListener('click', function() { document.body.classList.add('fullscreen'); });
+        btnExitFullscreen.addEventListener('click', function() { document.body.classList.remove('fullscreen'); });
+    </script>
+</body>
+</html>
