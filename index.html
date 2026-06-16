@@ -1544,13 +1544,16 @@
                 }
             });
 
+            // === 修正版：マウスを離したときの処理 ===
             window.addEventListener('mouseup', function(e) {
                 if (mode === 'mouse_selecting') {
-                    mode = 'idle';
+                    // ボタンを離した直後に発生する click イベントによる選択解除を防ぐため、
+                    // わずかにタイミングを遅らせてから idle 状態に戻します
+                    setTimeout(function() {
+                        mode = 'idle';
+                    }, 50);
                 }
             });
-
-
             // === タッチイベント制御（既存処理の維持） ===
             displayArea.addEventListener('touchstart', function(e) {
                 if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) {
