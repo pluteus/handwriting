@@ -788,6 +788,9 @@
         }
 
         function moveCursorToNearestPosition(lineElement, tapX) {
+//          【最優先追加】カーソルが移動したときは、理由を問わず画面上のすべての範囲選択を強制解除する
+            document.querySelectorAll('.char-item.selected, .space-char.selected').forEach(el => el.classList.remove('selected'));
+            
             const oldCursor = document.querySelector('.cursor');
             if (oldCursor) oldCursor.remove();
 
