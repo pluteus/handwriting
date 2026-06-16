@@ -1408,7 +1408,7 @@
             document.getElementById('btnFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
             document.getElementById('btnExitFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
         })();
-// === displayArea タッチ＆マウスドラッグ統合制御（超強固版） ===
+        // === displayArea タッチ＆マウスドラッグ統合制御（クリック時選択解除対応版） ===
         (function() {
             const zoomContainer = document.getElementById('zoomContainer');
             let currentScale = 1.0;
@@ -1523,7 +1523,6 @@
                 currentLine.id = 'currentLine';
             }
 
-            // 【超強力】マウス選択を「何があっても絶対に終了・確定させる」極振り関数
             function forceEndMouseSelection() {
                 cancelMouseLongPress();
                 if (mode === 'mouse_selecting' || isMouseSelectionReady || selectStartEl) {
@@ -1539,7 +1538,6 @@
             // === マウスの左ドラッグ範囲選択イベント ===
             displayArea.addEventListener('mousedown', function(e) {
                 if (e.button !== 0) return;
-                // スクロールバー付近のクリックは無視
                 if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
 
                 const startEl = charAtPoint(e.clientX, e.clientY);
@@ -1562,7 +1560,6 @@
                 }
             });
 
-            // マウスの移動はwindow全体で監視して取りこぼしを防ぐ
             window.addEventListener('mousemove', function(e) {
                 if (!selectStartEl) return;
 
@@ -1570,7 +1567,6 @@
                 const dy = e.clientY - mouseStartY;
                 const moveDistance = Math.sqrt(dx * dx + dy * dy);
 
-                // 8px以上動いたら選択モードを起動
                 if (!isMouseSelectionReady && moveDistance > 8) {
                     cancelMouseLongPress();
                     isMouseSelectionReady = true;
@@ -1591,42 +1587,38 @@
                 }
             }, { passive: false });
 
-            // 【最重要】画面全体のどこであっても、マウスが離されたら絶対に追尾を即座にブチ切る
             window.addEventListener('mouseup', function(e) {
                 if (e.button !== 0) return;
                 
                 const wasSelecting = forceEndMouseSelection();
                 
-                // ドラッグ選択を終了した直後のイベントであれば、他の干渉を防ぐため伝播を遮断
                 if (wasSelecting && mouseDragged) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
                 }
 
-                // 長押しもドラッグもされなかった単なるクリックの場合の通常カーソル移動
+                // 【修正箇所】単なる左クリック（ドラッグなし・長押しなし）でマウスが離された場合
                 if (!mouseDragged && !wasSelecting && mouseStartX !== 0) {
-                    // クリックした位置が文字要素の上ならカーソル移動を実行
                     if (charAtPoint(mouseStartX, mouseStartY) || e.target.closest('.line')) {
-                        moveCursorToPoint(mouseStartX, mouseStartY);
+                        // 1. まず既存の選択（ハイライト）を完全に解除
                         clearSelection();
+                        // 2. その後、クリックされた位置へ縦棒カーソルを移動
+                        moveCursorToPoint(mouseStartX, mouseStartY);
                     }
                 }
 
-                // 完全に変数を初期化
                 mouseStartX = 0;
                 mouseStartY = 0;
                 mouseDragged = false;
-            }, true); // ★true（キャプチャリング）により、全DOM要素の中で最優先で実行させます
+            }, true); 
 
-            // ブラウザ標準のテキストドラッグ機能や画像ドラッグ機能が暴走してmouseupを破壊するのを防ぐ
             displayArea.addEventListener('dragstart', function(e) {
                 if (selectStartEl) {
                     e.preventDefault();
                 }
             });
 
-            // 画面外（タブの境界やブラウザ外）にマウスが逃げた場合も確実に選択状態を確定
             window.addEventListener('blur', function() {
                 forceEndMouseSelection();
                 mouseDragged = false;
