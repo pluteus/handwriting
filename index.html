@@ -1410,7 +1410,7 @@
         })();
 
 
-        // === displayArea タッチ統合制御 ===
+        // === displayArea タッチ＆マウスドラッグ統合制御（最新版） ===
         (function() {
             const zoomContainer = document.getElementById('zoomContainer');
             let currentScale = 1.0;
@@ -1418,7 +1418,7 @@
             const MAX_SCALE = 4.0;
             const LONG_PRESS_MS = 500; 
 
-            let mode = 'idle';
+            let mode = 'idle'; // 'idle', 'longpress_pending', 'selecting', 'scrolling_1finger', 'pinching', 'mouse_selecting'
 
             let selectStartEl = null;
             let selectEndEl   = null;
@@ -1457,6 +1457,7 @@
                 if (si < 0 || ei < 0) return;
                 const lo = Math.min(si, ei), hi = Math.max(si, ei);
                 for (let i = lo; i <= hi; i++) all[i].classList.add('selected');
+                cursor.classList.add('hidden');
             }
 
             function clearSelection() {
@@ -1470,26 +1471,22 @@
             }
 
             function moveCursorToPoint(x, y) {
-                // まずタップした位置にある「行」を特定
                 const lines = Array.from(zoomContainer.querySelectorAll('.line'));
                 let targetLine = null;
                 
                 for (const line of lines) {
                     const r = line.getBoundingClientRect();
-                    // 上下の範囲内にある行をターゲットにする
                     if (y >= r.top && y <= r.bottom) {
                         targetLine = line;
                         break;
                     }
                 }
                 
-                // 行が見つかり、かつその行が空（文字なし）の場合
                 if (targetLine && targetLine.querySelectorAll('.char-item, .space-char').length === 0) {
                     moveCursorToNearestPosition(targetLine, x);
                     return;
                 }
 
-                // 文字がある場合は、従来通りもっとも近いキャラクターを探す
                 const els = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
                 if (els.length === 0) {
                     if (lines.length > 0) moveCursorToNearestPosition(lines[0], x);
@@ -1514,11 +1511,47 @@
                 }
                 currentLine = cursor.parentNode;
                 
-                // IDの同期
                 lines.forEach(l => l.id = '');
                 currentLine.id = 'currentLine';
             }
 
+            // === [新規追加] マウスの左ドラッグ範囲選択イベント ===
+            displayArea.addEventListener('mousedown', function(e) {
+                // 左クリック(button === 0)以外、または下端リサイズ境界付近のクリックなら処理しない
+                if (e.button !== 0) return;
+                if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
+
+                // 文字の上でドラッグが開始されたか確認
+                const startEl = charAtPoint(e.clientX, e.clientY);
+                if (startEl) {
+                    mode = 'mouse_selecting';
+                    selectStartEl = startEl;
+                    selectEndEl = startEl;
+                    clearSelection();
+                    selectStartEl.classList.add('selected');
+                    cursor.classList.add('hidden');
+                    e.preventDefault(); // テキストとしてのブラウザ標準選択を防ぐ
+                }
+            });
+
+            window.addEventListener('mousemove', function(e) {
+                if (mode !== 'mouse_selecting') return;
+
+                const el = charAtPoint(e.clientX, e.clientY);
+                if (el && el !== selectEndEl) {
+                    selectEndEl = el;
+                    updateSelection(selectStartEl, selectEndEl);
+                }
+            });
+
+            window.addEventListener('mouseup', function(e) {
+                if (mode === 'mouse_selecting') {
+                    mode = 'idle';
+                }
+            });
+
+
+            // === タッチイベント制御（既存処理の維持） ===
             displayArea.addEventListener('touchstart', function(e) {
                 if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) {
                     return;
@@ -1560,11 +1593,11 @@
                     scrollOriginTop  = displayArea.scrollTop;
                     clearSelection();
                 }
-                if (mode !== 'idle') e.preventDefault();
+                if (mode !== 'idle' && mode !== 'mouse_selecting') e.preventDefault();
             }, { passive: false });
 
             displayArea.addEventListener('touchmove', function(e) {
-                if (mode === 'idle') return;
+                if (mode === 'idle' || mode === 'mouse_selecting') return;
                 e.preventDefault();
 
                 if (e.touches.length === 1) {
