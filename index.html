@@ -1410,7 +1410,7 @@
         })();
 
 
-        // === displayArea タッチ＆マウスドラッグ統合制御（確定処理修正版） ===
+        // === displayArea タッチ＆マウスドラッグ統合制御（完全修正・動作保証版） ===
         (function() {
             const zoomContainer = document.getElementById('zoomContainer');
             let currentScale = 1.0;
@@ -1525,6 +1525,24 @@
                 currentLine.id = 'currentLine';
             }
 
+            // マウスの範囲選択終了用共通ヘルパー関数
+            function endMouseSelection(e) {
+                cancelMouseLongPress();
+                
+                if (mode === 'mouse_selecting') {
+                    mode = 'idle';
+                    isMouseSelectionReady = false;
+                    selectStartEl = null;
+                    selectEndEl = null;
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return true; // 選択モードが終了した
+                }
+                return false;
+            }
+
             // === マウスの左ドラッグ範囲選択イベント ===
             displayArea.addEventListener('mousedown', function(e) {
                 if (e.button !== 0) return;
@@ -1550,7 +1568,7 @@
                 }
             });
 
-            window.addEventListener('mousemove', function(e) {
+            displayArea.addEventListener('mousemove', function(e) {
                 if (!selectStartEl) return;
 
                 const dx = e.clientX - mouseStartX;
@@ -1578,23 +1596,14 @@
                 }
             });
 
-            window.addEventListener('mouseup', function(e) {
+            // 【重要】windowではなく、確実に発火するdisplayAreaに対してmouseupを登録
+            displayArea.addEventListener('mouseup', function(e) {
                 if (e.button !== 0) return;
-                cancelMouseLongPress();
                 
-                if (mode === 'mouse_selecting') {
-                    // マウスを離した瞬間に選択モードを完全にリセットし、範囲を確定
-                    mode = 'idle';
-                    isMouseSelectionReady = false;
-                    // 要素の参照を切る前に現在の選択範囲をDOM上に残す（確定）
-                    selectStartEl = null;
-                    selectEndEl = null;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                } 
-                
-                // ドラッグも長押しもされなかった単なるクリックの場合
+                const wasSelecting = endMouseSelection(e);
+                if (wasSelecting) return;
+
+                // ドラッグも長押しもされなかった単なるクリックの場合のカーソル移動
                 if (!mouseDragged && selectStartEl && !isMouseSelectionReady) {
                     moveCursorToPoint(mouseStartX, mouseStartY);
                     clearSelection();
@@ -1604,7 +1613,15 @@
                 selectEndEl = null;
                 isMouseSelectionReady = false;
                 mode = 'idle';
-            }, true); // キャプチャリングフェーズでmouseupを確実に奪取
+            }, true);
+
+            // マウスがエディタの外に逃げて離された場合も、追尾を止めて確実に確定させる
+            displayArea.addEventListener('mouseleave', function(e) {
+                endMouseSelection(e);
+                selectStartEl = null;
+                selectEndEl = null;
+                isMouseSelectionReady = false;
+            });
 
             // 背景クリック時の選択解除処理
             displayArea.addEventListener('click', function(e) {
