@@ -1407,17 +1407,41 @@ document.addEventListener('fullscreenchange', function() {
 
         updateActiveState();
 
-        // === ボタンダブルタップ拡大防止 ===
-        document.querySelectorAll('.btn').forEach(function(btn) {
-            let lastTap = 0;
-            btn.addEventListener('touchend', function(e) {
-                const now = Date.now();
-                if (now - lastTap < 350) {
-                    e.preventDefault();
-                }
-                lastTap = now;
-            }, { passive: false });
-        });
+        // === ボタン連続タップ対応（拡大防止＋連打動作） ===
+        // touchstart で即アクション実行 → touchend で click を preventDefault して二重動作を防ぐ
+        // これによりダブルタップによる画面拡大を防止しつつ、連打でも毎回動作する
+        (function() {
+            const rapidBtns = [
+                { id: 'btnBackspace', clickId: 'btnBackspace' },
+                { id: 'btnSpace',     clickId: 'btnSpace'     },
+                { id: 'btnEnter',     clickId: 'btnEnter'     }
+            ];
+
+            rapidBtns.forEach(function(item) {
+                const btn = document.getElementById(item.id);
+                if (!btn) return;
+
+                let touchFired = false;
+
+                btn.addEventListener('touchstart', function(e) {
+                    e.preventDefault(); // ダブルタップ拡大・スクロール防止
+                    touchFired = true;
+                    // pointerdown で saveSelectionSnapshot が呼ばれるので
+                    // それを手動で再現しておく（touchstart は pointerdown より先に来ることがある）
+                    saveSelectionSnapshot();
+                    // 対応する click ハンドラの処理を直接呼ぶ
+                    btn.click();
+                }, { passive: false });
+
+                btn.addEventListener('touchend', function(e) {
+                    if (touchFired) {
+                        e.preventDefault(); // click イベントの二重発火を防ぐ
+                        touchFired = false;
+                    }
+                }, { passive: false });
+            });
+        })();
+
 
 
         // === 境界線のドラッグ調整 ＆ 入力エリアの動的サイズ計算（長方形化対応） ===
@@ -1909,6 +1933,32 @@ document.addEventListener('fullscreenchange', function() {
                 // Ctrlキー（またはMacのCmdキー）との組み合わせ処理
                 if (e.ctrlKey || e.metaKey) {
                     const key = e.key.toLowerCase();
+
+                    // --- 元に戻す (Ctrl + Z) ---
+                    if (key === 'z') {
+                        e.preventDefault();
+                        undo();
+                        return;
+                    }
+
+                    // --- やり直し (Ctrl + Y) ---
+                    if (key === 'y') {
+                        e.preventDefault();
+                        redo();
+                        return;
+                    }
+
+                    // --- 全選択 (Ctrl + A) ---
+                    if (key === 'a') {
+                        e.preventDefault();
+                        finalizeAll();
+                        const all = Array.from(document.querySelectorAll('#zoomContainer .char-item, #zoomContainer .space-char'));
+                        if (all.length > 0) {
+                            all.forEach(el => el.classList.add('selected'));
+                            cursor.classList.add('hidden');
+                        }
+                        return;
+                    }
 
                     // --- コピー (Ctrl + C) ---
                     if (key === 'c') {
