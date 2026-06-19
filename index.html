@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#f0f0f0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="走り書きメモ">
     <title>走り書きメモ</title>
     <style>
         * {
@@ -2197,6 +2202,152 @@ document.addEventListener('fullscreenchange', function() {
             });
         })();
         // === ここまで追加：キーボードイベント制御（コピペ対応版） ===
+
+        // ============================================================
+        // PWA対応: マニフェスト動的生成 ＋ Service Worker インライン登録
+        // ============================================================
+        (function() {
+
+            // --- アイコン (SVG → PNG をCanvasで生成) ---
+            function makeIconDataURL(size) {
+                const c = document.createElement('canvas');
+                c.width = size; c.height = size;
+                const ctx = c.getContext('2d');
+
+                // 背景
+                ctx.fillStyle = '#333333';
+                ctx.beginPath();
+                ctx.roundRect(0, 0, size, size, size * 0.18);
+                ctx.fill();
+
+                // ペンの軌跡イメージ（手書き風の線を3本）
+                ctx.strokeStyle = '#e94560';
+                ctx.lineWidth = size * 0.07;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                const s = size / 192; // 192px 基準のスケール
+                ctx.beginPath();
+                ctx.moveTo(30*s, 140*s);
+                ctx.bezierCurveTo(50*s, 100*s, 70*s, 80*s, 96*s, 96*s);
+                ctx.bezierCurveTo(122*s, 112*s, 140*s, 60*s, 160*s, 50*s);
+                ctx.stroke();
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = size * 0.055;
+                ctx.beginPath();
+                ctx.moveTo(30*s, 100*s);
+                ctx.bezierCurveTo(60*s, 110*s, 80*s, 130*s, 96*s, 115*s);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(96*s, 115*s);
+                ctx.bezierCurveTo(112*s, 100*s, 130*s, 90*s, 160*s, 140*s);
+                ctx.stroke();
+
+                return c.toDataURL('image/png');
+            }
+
+            const icon192 = makeIconDataURL(192);
+            const icon512 = makeIconDataURL(512);
+
+            // --- Web App Manifest を Blob URL で動的生成 ---
+            const manifest = {
+                name: '走り書きメモ',
+                short_name: '走り書き',
+                description: '手書き文字を並べて文章を作るメモアプリ',
+                start_url: './',
+                display: 'standalone',
+                background_color: '#ffffff',
+                theme_color: '#f0f0f0',
+                orientation: 'any',
+                icons: [
+                    { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+                    { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+                ]
+            };
+
+            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+            const manifestURL  = URL.createObjectURL(manifestBlob);
+            const link = document.createElement('link');
+            link.rel  = 'manifest';
+            link.href = manifestURL;
+            document.head.appendChild(link);
+
+            // Apple Touch Icon (ホーム画面アイコン用)
+            const appleIcon = document.createElement('link');
+            appleIcon.rel  = 'apple-touch-icon';
+            appleIcon.href = icon192;
+            document.head.appendChild(appleIcon);
+
+            // --- Service Worker をインラインで文字列化して Blob 登録 ---
+            const SW_CACHE_NAME = 'hashirigaki-memo-v1';
+
+            const swCode = `
+const CACHE_NAME = '${SW_CACHE_NAME}';
+
+// インストール時: 自分自身（index.html）をキャッシュ
+self.addEventListener('install', function(event) {
+    event.waitUntil(
+        caches.open(CACHE_NAME).then(function(cache) {
+            return cache.addAll([self.location.pathname]);
+        }).then(function() {
+            return self.skipWaiting();
+        })
+    );
+});
+
+// アクティベート時: 古いキャッシュを削除
+self.addEventListener('activate', function(event) {
+    event.waitUntil(
+        caches.keys().then(function(keys) {
+            return Promise.all(
+                keys.filter(function(k) { return k !== CACHE_NAME; })
+                    .map(function(k) { return caches.delete(k); })
+            );
+        }).then(function() {
+            return self.clients.claim();
+        })
+    );
+});
+
+// フェッチ: キャッシュ優先、なければネットワーク、それも失敗したらキャッシュフォールバック
+self.addEventListener('fetch', function(event) {
+    if (event.request.method !== 'GET') return;
+    event.respondWith(
+        caches.match(event.request).then(function(cached) {
+            if (cached) return cached;
+            return fetch(event.request).then(function(response) {
+                if (response && response.status === 200) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(function(cache) {
+                        cache.put(event.request, clone);
+                    });
+                }
+                return response;
+            }).catch(function() {
+                return caches.match(self.location.pathname);
+            });
+        })
+    );
+});
+`;
+
+            if ('serviceWorker' in navigator) {
+                const swBlob = new Blob([swCode], { type: 'application/javascript' });
+                const swURL  = URL.createObjectURL(swBlob);
+                navigator.serviceWorker.register(swURL, { scope: './' })
+                    .then(function(reg) {
+                        console.log('[SW] 登録成功:', reg.scope);
+                    })
+                    .catch(function(err) {
+                        console.warn('[SW] 登録失敗 (ローカルファイルでは動作しません):', err);
+                    });
+            }
+        })();
+        // ============================================================
+        // PWA 対応 ここまで
+        // ============================================================
     </script>
 </body>
 </html>
