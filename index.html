@@ -303,8 +303,8 @@
 
         .canvas-wrapper {
             position: relative;
-            flex-shrink: 0;
-            width: var(--cv-w, 160px);
+            flex: 1 1 0;
+            min-width: 40px;
             height: var(--cv-h, 160px);
         }
 
@@ -324,8 +324,8 @@
             cursor: crosshair;
             display: block;
             touch-action: none;
-            width: var(--cv-w, 160px) !important;
-            height: var(--cv-h, 160px) !important;
+            width: 100% !important;
+            height: 100% !important;
         }
 
         .canvas-label {
@@ -412,6 +412,10 @@
 <button class="toolbar-btn" id="btnSaveImage">💾</button>
 <button class="toolbar-btn" id="btnUndo">↶</button>
 <button class="toolbar-btn" id="btnRedo">↷</button>
+<button class="toolbar-btn" id="btnSelectAll" title="全選択">全</button>
+<button class="toolbar-btn" id="btnCopy">📋</button>
+<button class="toolbar-btn" id="btnCut">✂️</button>
+<button class="toolbar-btn" id="btnPaste">📥</button>
 <button class="toolbar-btn" id="btnSettings">⚙️</button>
 <button class="toolbar-btn" id="btnFullscreen">⛶</button>
     </div>
@@ -476,12 +480,6 @@
 <button class="btn" id="btnBackspace">⌫</button>
 <button class="btn" id="btnSpace">␣</button>
 <button class="btn" id="btnEnter">↲</button>
-        </div>
-        <div class="buttons">
-<button class="btn" id="btnCopy">📋</button>
-<button class="btn" id="btnCut">✂️</button>
-<button class="btn" id="btnPaste">📥</button>
-
         </div>
     </div>
 
@@ -677,17 +675,18 @@ function redo() {
                 return;
             }
 
-            const srcSize = sourceCanvas.width; 
-            const charRes = CHAR_RESOLUTION;  
-            const displayH = 32;              
+            const srcW = sourceCanvas.width;
+            const srcH = sourceCanvas.height;
+            const charRes = CHAR_RESOLUTION;
+            const displayH = 32;
 
-            const srcPixels = sourceCtx.getImageData(0, 0, srcSize, srcSize);
+            const srcPixels = sourceCtx.getImageData(0, 0, srcW, srcH);
             const sd = srcPixels.data;
             const ALPHA_THRESHOLD = 32;
-            let srcMinX = srcSize, srcMaxX = 0;
-            for (let y = 0; y < srcSize; y++) {
-                for (let x = 0; x < srcSize; x++) {
-                    const alpha = sd[(y * srcSize + x) * 4 + 3];
+            let srcMinX = srcW, srcMaxX = 0;
+            for (let y = 0; y < srcH; y++) {
+                for (let x = 0; x < srcW; x++) {
+                    const alpha = sd[(y * srcW + x) * 4 + 3];
                     if (alpha > ALPHA_THRESHOLD) {
                         if (x < srcMinX) srcMinX = x;
                         if (x > srcMaxX) srcMaxX = x;
@@ -703,19 +702,19 @@ function redo() {
             }
 
             let finalCanvas;
-            let finalImgW; 
-            let displayW;  
+            let finalImgW;
+            let displayW;
 
             if (!MONO_WIDTH) {
-                const scale = charRes / srcSize;
-                const displayScale = displayH / srcSize; 
+                const displayScale = displayH / srcH;
                 const srcMargin = Math.round(PROP_MARGIN / displayScale);
 
                 const cropSrcX = Math.max(0, srcMinX - srcMargin);
-                const cropSrcW = Math.min(srcSize - cropSrcX, srcMaxX - srcMinX + 1 + srcMargin * 2);
-                const cropSrcH = srcSize;
+                const cropSrcW = Math.min(srcW - cropSrcX, srcMaxX - srcMinX + 1 + srcMargin * 2);
+                const cropSrcH = srcH;
 
-                finalImgW = Math.max(1, Math.round(cropSrcW * scale));
+                const scaleW = charRes / srcH;
+                finalImgW = Math.max(1, Math.round(cropSrcW * scaleW));
                 displayW  = Math.max(1, Math.round(cropSrcW * displayScale + PROP_MARGIN * 2));
 
                 finalCanvas = document.createElement('canvas');
@@ -734,7 +733,7 @@ function redo() {
                 finalCanvas.height = charRes;
                 const finalCtx = finalCanvas.getContext('2d');
                 finalCtx.clearRect(0, 0, charRes, charRes);
-                finalCtx.drawImage(sourceCanvas, 0, 0, srcSize, srcSize, 0, 0, charRes, charRes);
+                finalCtx.drawImage(sourceCanvas, 0, 0, srcW, srcH, 0, 0, charRes, charRes);
                 finalImgW = charRes;
                 displayW  = displayH;
             }
@@ -1160,6 +1159,14 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             }
         }
 
+        document.getElementById('btnSelectAll').addEventListener('click', function() {
+            finalizeAll();
+            const all = Array.from(document.querySelectorAll('#zoomContainer .char-item, #zoomContainer .space-char'));
+            if (all.length === 0) return;
+            all.forEach(el => el.classList.add('selected'));
+            cursor.classList.add('hidden');
+        });
+
         // コピー・切り取りボタン：mousedown/pointerdown時点で選択スナップショットを取る
         // （click発火前にmouseupキャプチャで選択状態が変わる場合があるため）
         let _copySnapshot = [];
@@ -1492,13 +1499,8 @@ document.addEventListener('fullscreenchange', function() {
             window.addEventListener('touchend', endResize);
 
 
-            const PADDING = 10 * 2;   
-            const GAP = 8;            
-            const BTN_COL_W = 54;     
-            const BTN_COLS = 2;       
-            const CV_COUNT = 2;       
-            
-            const FIXED_W = BTN_COL_W * BTN_COLS + GAP * (BTN_COLS + CV_COUNT - 1) + PADDING;
+            const PADDING = 10 * 2;
+            const GAP = 8;
 
             function checkLayout() {
                 if (document.body.classList.contains('fullscreen')) {
@@ -1509,46 +1511,32 @@ document.addEventListener('fullscreenchange', function() {
                     displayArea.style.height = displayHeight + 'px';
                 }
 
-                const totalW = inputArea.offsetWidth;
                 const totalH = inputArea.clientHeight;
+                const finalH = Math.max(40, totalH - PADDING);
 
-                const availableW = totalW - FIXED_W;
-                let maxWForCanvas = Math.floor(availableW / CV_COUNT);
-                if (maxWForCanvas < 40) maxWForCanvas = 40; 
-
-                const maxHForCanvas = Math.max(40, totalH - PADDING);
-
-                let finalW = Math.min(maxWForCanvas, maxHForCanvas);
-                let finalH = finalW;
-
-                const requiredBtnH = 48 * 2 + GAP;
-
-                if (maxHForCanvas < requiredBtnH) {
-                    finalH = maxHForCanvas;
-                    finalW = maxWForCanvas;
-                } else {
-                    if (finalH === maxHForCanvas && finalW < maxWForCanvas) {
-                        finalW = maxWForCanvas;
-                    }
-                }
-
-                inputArea.style.setProperty('--cv-w', finalW + 'px');
                 inputArea.style.setProperty('--cv-h', finalH + 'px');
 
-const btnSize = Math.max(
-    40,
-    Math.floor(finalH / 4)
-);
+                // canvasの描画解像度をwrapperの実サイズに合わせる
+                requestAnimationFrame(() => {
+                    ['wrapper1', 'wrapper2'].forEach(id => {
+                        const wr = document.getElementById(id);
+                        const cv = wr.querySelector('canvas');
+                        const w = wr.clientWidth;
+                        const h = wr.clientHeight;
+                        if (w > 0 && h > 0) {
+                            cv.width = w;
+                            cv.height = h;
+                            const ctx = cv.getContext('2d');
+                            ctx.lineCap = 'round';
+                            ctx.lineJoin = 'round';
+                            ctx.lineWidth = 6;
+                            ctx.strokeStyle = '#000000';
+                        }
+                    });
+                });
 
-inputArea.style.setProperty(
-    '--btn-size',
-    btnSize + 'px'
-);
-
-const buttonColumnsWidth =
-    btnSize * 2 +
-    GAP;
-    
+                const btnSize = Math.max(40, Math.floor(finalH / 4));
+                inputArea.style.setProperty('--btn-size', btnSize + 'px');
             }
 
             checkLayout();
