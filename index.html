@@ -433,13 +433,6 @@
                 </div>
             </div>
             <div class="settings-row">
-                <span class="settings-label">等幅フォント</span>
-                <label class="settings-toggle">
-                    <input type="checkbox" id="settingMonoWidth">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="settings-row">
                 <span class="settings-label">プロポーショナル余白</span>
                 <div>
                     <input type="number" class="settings-input" id="settingPropMargin" value="1" min="0" max="10">
@@ -512,7 +505,6 @@ const MAX_HISTORY = 100;
         let currentCtx = null;
         let autoFinalizeTimer = null;
         let AUTO_FINALIZE_DELAY = 1000;
-        let MONO_WIDTH = false;
         let PROP_MARGIN = 1;
         let CHAR_RESOLUTION = 64;
 
@@ -705,38 +697,27 @@ function redo() {
             let finalImgW;
             let displayW;
 
-            if (!MONO_WIDTH) {
-                const displayScale = displayH / srcH;
-                const srcMargin = Math.round(PROP_MARGIN / displayScale);
+            const displayScale = displayH / srcH;
+            const srcMargin = Math.round(PROP_MARGIN / displayScale);
 
-                const cropSrcX = Math.max(0, srcMinX - srcMargin);
-                const cropSrcW = Math.min(srcW - cropSrcX, srcMaxX - srcMinX + 1 + srcMargin * 2);
-                const cropSrcH = srcH;
+            const cropSrcX = Math.max(0, srcMinX - srcMargin);
+            const cropSrcW = Math.min(srcW - cropSrcX, srcMaxX - srcMinX + 1 + srcMargin * 2);
+            const cropSrcH = srcH;
 
-                const scaleW = charRes / srcH;
-                finalImgW = Math.max(1, Math.round(cropSrcW * scaleW));
-                displayW  = Math.max(1, Math.round(cropSrcW * displayScale + PROP_MARGIN * 2));
+            const scaleW = charRes / srcH;
+            finalImgW = Math.max(1, Math.round(cropSrcW * scaleW));
+            displayW  = Math.max(1, Math.round(cropSrcW * displayScale + PROP_MARGIN * 2));
 
-                finalCanvas = document.createElement('canvas');
-                finalCanvas.width = finalImgW;
-                finalCanvas.height = charRes;
-                const finalCtx = finalCanvas.getContext('2d');
-                finalCtx.clearRect(0, 0, finalImgW, charRes);
-                finalCtx.drawImage(
-                    sourceCanvas,
-                    cropSrcX, 0, cropSrcW, cropSrcH,
-                    0, 0, finalImgW, charRes
-                );
-            } else {
-                finalCanvas = document.createElement('canvas');
-                finalCanvas.width = charRes;
-                finalCanvas.height = charRes;
-                const finalCtx = finalCanvas.getContext('2d');
-                finalCtx.clearRect(0, 0, charRes, charRes);
-                finalCtx.drawImage(sourceCanvas, 0, 0, srcW, srcH, 0, 0, charRes, charRes);
-                finalImgW = charRes;
-                displayW  = displayH;
-            }
+            finalCanvas = document.createElement('canvas');
+            finalCanvas.width = finalImgW;
+            finalCanvas.height = charRes;
+            const finalCtx = finalCanvas.getContext('2d');
+            finalCtx.clearRect(0, 0, finalImgW, charRes);
+            finalCtx.drawImage(
+                sourceCanvas,
+                cropSrcX, 0, cropSrcW, cropSrcH,
+                0, 0, finalImgW, charRes
+            );
 
             const imgData = finalCanvas.toDataURL('image/png');
 
@@ -790,7 +771,7 @@ function redo() {
 
             if (maxX === 0) return null;
 
-            const margin = MONO_WIDTH ? 0 : PROP_MARGIN;
+            const margin = PROP_MARGIN;
 
             return {
                 x: Math.max(0, minX - margin),
@@ -1359,7 +1340,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
         // 設定
         const settingsOverlay = document.getElementById('settingsOverlay');
         const settingAutoTime = document.getElementById('settingAutoTime');
-        const settingMonoWidth = document.getElementById('settingMonoWidth');
         const settingPropMargin = document.getElementById('settingPropMargin');
         const settingCharRes = document.getElementById('settingCharRes');
         const autoTimeDisplay = document.getElementById('autoTimeDisplay');
@@ -1374,7 +1354,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 AUTO_FINALIZE_DELAY = newTime * 1000;
                 autoTimeDisplay.textContent = newTime;
             }
-            MONO_WIDTH = settingMonoWidth.checked;
             const newMargin = parseInt(settingPropMargin.value, 10);
             if (!isNaN(newMargin) && newMargin >= 0 && newMargin <= 10) {
                 PROP_MARGIN = newMargin;
