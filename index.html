@@ -451,6 +451,20 @@
                     <span class="settings-unit">px</span>
                 </div>
             </div>
+            <div class="settings-row">
+                <span class="settings-label">とめ・はね・はらい</span>
+                <label class="settings-toggle">
+                    <input type="checkbox" id="settingTomehane" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">文字の太さ</span>
+                <div>
+                    <input type="number" class="settings-input" id="settingBrushWidth" value="14" min="4" max="40" step="1">
+                    <span class="settings-unit">px</span>
+                </div>
+            </div>
             <button class="settings-close" id="btnCloseSettings">閉じる</button>
         </div>
     </div>
@@ -512,16 +526,21 @@ const MAX_HISTORY = 100;
         let AUTO_FINALIZE_DELAY = 1000;
         let PROP_MARGIN = 1;
         let CHAR_RESOLUTION = 64;
+        let ENABLE_TOMEHANE = true; // とめ・はね・はらいを反映させるか
+        let BASE_BRUSH_WIDTH = 14; // 基本筆太さ（320px canvas基準）
 
+        // === 筆文字ストローク管理 ===
+        // 各ストローク: { points: [{x,y,pressure,time}], ...}
+        let strokes1 = []; // canvas1のストローク履歴
+        let strokes2 = []; // canvas2のストローク履歴
+        let currentStroke = null; // 現在書き中のストローク
+        let currentStrokes = null; // 現在のキャンバスのストローク配列
+
+        // ctxは直接使わずに、全描画はredrawCanvas()で行うため初期設定のみ
         ctx1.lineCap = 'round';
         ctx1.lineJoin = 'round';
-        ctx1.lineWidth = 6;
-        ctx1.strokeStyle = '#000000';
-
         ctx2.lineCap = 'round';
         ctx2.lineJoin = 'round';
-        ctx2.lineWidth = 6;
-        ctx2.strokeStyle = '#000000';
 
 function saveHistory() {
     redoStack = [];
@@ -611,6 +630,178 @@ function redo() {
             }
         }
 
+        // === 筆文字描画エンジン ===
+
+        /**
+         * 単一ストロークを筆文字風に描画する
+         * とめ: ストローク末尾で筆が止まるため、末尾を太くしっかり描く
+         * はね: 末尾が次の画方向へ細くなって跳ねる（ストロークの向きで判定）
+         * はらい: ストローク末尾に向かって徐々に細くなる
+         */
+        function drawBrushStroke(ctx, points) {
+            if (points.length < 2) {
+                if (points.length === 1) {
+                    // 点打ち（とめ）
+                    ctx.beginPath();
+                    ctx.arc(points[0].x, points[0].y, BASE_BRUSH_WIDTH * 0.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#000000';
+                    ctx.fill();
+                }
+                return;
+            }
+
+            const n = points.length;
+
+            // ストローク全体の速度・方向を分析してとめ/はね/はらいを判定
+            // 終端付近の速度（速い=はらい、遅い=とめ）
+            const tailLen = Math.min(6, Math.floor(n * 0.3));
+            let tailDist = 0;
+            for (let i = n - tailLen; i < n - 1; i++) {
+                const dx = points[i+1].x - points[i].x;
+                const dy = points[i+1].y - points[i].y;
+                tailDist += Math.sqrt(dx*dx + dy*dy);
+            }
+            const tailSpeed = tailDist / Math.max(tailLen, 1);
+
+            // 終端方向ベクトル
+            const lastP = points[n-1];
+            const prevP = points[Math.max(0, n - Math.min(4, n))];
+            const endDx = lastP.x - prevP.x;
+            const endDy = lastP.y - prevP.y;
+            const endLen = Math.sqrt(endDx*endDx + endDy*endDy);
+
+            // はらい判定: 終端が速く、左斜め下 or 右斜め下に向かう
+            const isHarai = ENABLE_TOMEHANE && tailSpeed > 8 && endLen > 5;
+            // はね判定: 終端が遅めで、上方向や内側に折り返す傾向
+            const endAngle = Math.atan2(endDy, endDx);
+            const isHane = ENABLE_TOMEHANE && !isHarai && tailSpeed > 3 && endDy < -2; // 上向きで終わるとはね
+
+            // ストロークを区間ごとに描画（太さを変化させる）
+            ctx.save();
+            ctx.fillStyle = '#000000';
+            ctx.strokeStyle = '#000000';
+
+            for (let i = 1; i < n; i++) {
+                const p0 = points[i - 1];
+                const p1 = points[i];
+
+                // 進捗率（0=始点, 1=終点）
+                const t = i / (n - 1);
+
+                // 基本太さの計算
+                // 始点: やや細め（筆が入るとき）→ 中盤: 最大太さ → 終点: 効果によって変化
+                let widthFactor;
+                if (t < 0.1) {
+                    // 書き始め: 細→太（筆の入り）
+                    widthFactor = 0.4 + t * 6;
+                } else if (t < 0.75 || !ENABLE_TOMEHANE) {
+                    // 中間: 最大太さ（微妙に変化）
+                    // とめ・はね・はらいを反映しない場合はここで太さを固定
+                    widthFactor = 1.0;
+                } else {
+                    // 終端処理
+                    const tailT = (t - 0.75) / 0.25; // 0→1
+
+                    if (isHarai) {
+                        // はらい: 徐々に細くなってゼロへ
+                        widthFactor = 1.0 - tailT * tailT;
+                    } else if (isHane) {
+                        // はね: 少し太くなってから急に細くなる（跳ねる感じ）
+                        widthFactor = tailT < 0.4
+                            ? 1.0 + tailT * 0.3
+                            : 1.3 - (tailT - 0.4) * 2.2;
+                        widthFactor = Math.max(0.05, widthFactor);
+                    } else {
+                        // とめ: 少し太くなってから止まる（筆を押し付ける感じ）
+                        widthFactor = tailT < 0.5
+                            ? 1.0 + tailT * 0.4
+                            : 1.2 - tailT * 0.2;
+                    }
+                }
+
+                const w = Math.max(1, BASE_BRUSH_WIDTH * widthFactor);
+
+                // 線分の方向に垂直な方向を求めて、太い線分を塗りつぶし多角形で描画
+                const dx = p1.x - p0.x;
+                const dy = p1.y - p0.y;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                if (len < 0.1) continue;
+
+                // 前のwidthFactor
+                let prevWidthFactor;
+                if ((i-1) / (n-1) < 0.1) {
+                    prevWidthFactor = 0.4 + ((i-1)/(n-1)) * 6;
+                } else if ((i-1) / (n-1) < 0.75 || !ENABLE_TOMEHANE) {
+                    prevWidthFactor = 1.0;
+                } else {
+                    const pt = ((i-1)/(n-1) - 0.75) / 0.25;
+                    if (isHarai) {
+                        prevWidthFactor = 1.0 - pt * pt;
+                    } else if (isHane) {
+                        prevWidthFactor = pt < 0.4 ? 1.0 + pt * 0.3 : 1.3 - (pt - 0.4) * 2.2;
+                        prevWidthFactor = Math.max(0.05, prevWidthFactor);
+                    } else {
+                        prevWidthFactor = pt < 0.5 ? 1.0 + pt * 0.4 : 1.2 - pt * 0.2;
+                    }
+                }
+                const w0 = Math.max(1, BASE_BRUSH_WIDTH * prevWidthFactor);
+
+                // 法線方向
+                const nx = -dy / len;
+                const ny = dx / len;
+
+                // 台形ポリゴンで描画
+                ctx.beginPath();
+                ctx.moveTo(p0.x + nx * w0 * 0.5, p0.y + ny * w0 * 0.5);
+                ctx.lineTo(p1.x + nx * w * 0.5, p1.y + ny * w * 0.5);
+                ctx.lineTo(p1.x - nx * w * 0.5, p1.y - ny * w * 0.5);
+                ctx.lineTo(p0.x - nx * w0 * 0.5, p0.y - ny * w0 * 0.5);
+                ctx.closePath();
+                ctx.fill();
+
+                // 丸い継ぎ目を追加（ポリゴン間のギャップを埋める）
+                ctx.beginPath();
+                ctx.arc(p1.x, p1.y, w * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // はねの場合：終端に小さな跳ねを追加
+            if (isHane && n >= 3) {
+                const tp = points[n-1];
+                const pp = points[Math.max(0, n-3)];
+                // はねる方向（ストロークの方向に対して内側斜め上）
+                const hDx = tp.x - pp.x;
+                const hDy = tp.y - pp.y;
+                const hLen = Math.sqrt(hDx*hDx + hDy*hDy);
+                if (hLen > 2) {
+                    // 法線方向（内側）にはねを伸ばす
+                    const haneLen = BASE_BRUSH_WIDTH * 0.8;
+                    const haneDirX = -hDy / hLen * 0.6 + hDx / hLen * 0.4;
+                    const haneDirY = hDx / hLen * 0.6 + hDy / hLen * 0.4;
+                    ctx.beginPath();
+                    ctx.moveTo(tp.x, tp.y);
+                    ctx.quadraticCurveTo(
+                        tp.x + haneDirX * haneLen * 0.5,
+                        tp.y + haneDirY * haneLen * 0.5 - haneLen * 0.3,
+                        tp.x + haneDirX * haneLen,
+                        tp.y + haneDirY * haneLen - haneLen * 0.5
+                    );
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#000000';
+                    ctx.stroke();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function redrawCanvas(canvas, ctx, strokes) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (const stroke of strokes) {
+                drawBrushStroke(ctx, stroke.points);
+            }
+        }
+
         function startDraw(canvas, ctx, e) {
             isDrawing = true;
             currentCanvas = canvas;
@@ -619,8 +810,15 @@ function redo() {
             lastX = pos.x;
             lastY = pos.y;
 
-            if (canvas === canvas1) hasDrawing1 = true;
-            else hasDrawing2 = true;
+            // 新しいストローク開始
+            currentStroke = { points: [{ x: pos.x, y: pos.y, time: Date.now() }] };
+            if (canvas === canvas1) {
+                currentStrokes = strokes1;
+                hasDrawing1 = true;
+            } else {
+                currentStrokes = strokes2;
+                hasDrawing2 = true;
+            }
 
             if (canvas === canvas1 && hasDrawing2) {
                 finalizeCharacter(2);
@@ -628,18 +826,28 @@ function redo() {
                 finalizeCharacter(1);
             }
 
+            // 最初の点を描画
+            redrawCanvas(canvas, ctx, currentStrokes);
+            drawBrushStroke(ctx, currentStroke.points);
+
             startAutoFinalizeTimer(canvas === canvas1 ? 1 : 2);
             updateActiveState();
         }
 
         function doDraw(e) {
-            if (!isDrawing || !currentCanvas || !currentCtx) return;
+            if (!isDrawing || !currentCanvas || !currentCtx || !currentStroke) return;
             const pos = getPos(currentCanvas, e);
 
-            currentCtx.beginPath();
-            currentCtx.moveTo(lastX, lastY);
-            currentCtx.lineTo(pos.x, pos.y);
-            currentCtx.stroke();
+            // 点を追加（間引き: 最小距離3px以上）
+            const last = currentStroke.points[currentStroke.points.length - 1];
+            const dx = pos.x - last.x;
+            const dy = pos.y - last.y;
+            if (dx*dx + dy*dy > 9) {
+                currentStroke.points.push({ x: pos.x, y: pos.y, time: Date.now() });
+                // キャンバス全体を再描画
+                redrawCanvas(currentCanvas, currentCtx, currentStrokes);
+                drawBrushStroke(currentCtx, currentStroke.points);
+            }
 
             lastX = pos.x;
             lastY = pos.y;
@@ -652,9 +860,19 @@ function redo() {
         }
 
         function endDraw() {
+            if (isDrawing && currentStroke && currentStrokes) {
+                // ストロークを確定してストローク配列に追加
+                if (currentStroke.points.length > 0) {
+                    currentStrokes.push(currentStroke);
+                    // 最終描画
+                    redrawCanvas(currentCanvas, currentCtx, currentStrokes);
+                }
+            }
             isDrawing = false;
             currentCanvas = null;
             currentCtx = null;
+            currentStroke = null;
+            currentStrokes = null;
         }
 
         function finalizeCharacter(canvasNum) {
@@ -742,8 +960,13 @@ function redo() {
 
             sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
 
-            if (canvasNum === 1) hasDrawing1 = false;
-            else hasDrawing2 = false;
+            if (canvasNum === 1) {
+                hasDrawing1 = false;
+                strokes1 = [];
+            } else {
+                hasDrawing2 = false;
+                strokes2 = [];
+            }
 
             displayArea.scrollTop = displayArea.scrollHeight;
             updateActiveState();
@@ -1347,6 +1570,8 @@ document.getElementById('btnRedo').addEventListener('click', redo);
         const settingAutoTime = document.getElementById('settingAutoTime');
         const settingPropMargin = document.getElementById('settingPropMargin');
         const settingCharRes = document.getElementById('settingCharRes');
+        const settingTomehane = document.getElementById('settingTomehane');
+        const settingBrushWidth = document.getElementById('settingBrushWidth');
         const autoTimeDisplay = document.getElementById('autoTimeDisplay');
 
         document.getElementById('btnSettings').addEventListener('click', function() {
@@ -1366,6 +1591,11 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const newCharRes = parseInt(settingCharRes.value, 10);
             if (!isNaN(newCharRes) && newCharRes >= 32 && newCharRes <= 256) {
                 CHAR_RESOLUTION = newCharRes;
+            }
+            ENABLE_TOMEHANE = settingTomehane.checked;
+            const newBrushWidth = parseInt(settingBrushWidth.value, 10);
+            if (!isNaN(newBrushWidth) && newBrushWidth >= 4 && newBrushWidth <= 40) {
+                BASE_BRUSH_WIDTH = newBrushWidth;
             }
             settingsOverlay.classList.remove('show');
         });
