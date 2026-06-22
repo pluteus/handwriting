@@ -2381,7 +2381,7 @@ document.addEventListener('fullscreenchange', function() {
                             prevLine.appendChild(joinCursor);
 
                             const elementsToMove = children.filter(el => el !== cursor);
-                            elementsToMove.forEach(el => prevLine.insertBefore(el, joinCursor.nextSibling));
+                            elementsToMove.forEach(el => prevLine.insertBefore(el, joinCursor));
 
                             currentLine.remove();
 
@@ -2446,50 +2446,70 @@ document.addEventListener('fullscreenchange', function() {
         // ============================================================
         // PWA対応: マニフェスト動的生成 ＋ Service Worker インライン登録
         // ============================================================
+        // === Android 端端スワイプ（戻るジェスチャー）防止 ===
+        (function() {
+            const EDGE_WIDTH = 30; // px: 左端からこの幅以内のタッチを遮断
+            document.addEventListener('touchstart', function(e) {
+                if (e.touches.length > 0 && e.touches[0].clientX < EDGE_WIDTH) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        })();
+        // === ここまで: スワイプ防止 ===
+
         (function() {
 
-            // --- アイコン (SVG → PNG をCanvasで生成) ---
+            // --- アイコン: SVGをCanvasにラスタライズしてPNG化 ---
             function makeIconDataURL(size) {
-                const c = document.createElement('canvas');
-                c.width = size; c.height = size;
-                const ctx = c.getContext('2d');
-
-                // 背景
-                ctx.fillStyle = '#333333';
-                ctx.beginPath();
-                ctx.roundRect(0, 0, size, size, size * 0.18);
-                ctx.fill();
-
-                // ペンの軌跡イメージ（手書き風の線を3本）
-                ctx.strokeStyle = '#e94560';
-                ctx.lineWidth = size * 0.07;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-
-                const s = size / 192; // 192px 基準のスケール
-                ctx.beginPath();
-                ctx.moveTo(30*s, 140*s);
-                ctx.bezierCurveTo(50*s, 100*s, 70*s, 80*s, 96*s, 96*s);
-                ctx.bezierCurveTo(122*s, 112*s, 140*s, 60*s, 160*s, 50*s);
-                ctx.stroke();
-
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = size * 0.055;
-                ctx.beginPath();
-                ctx.moveTo(30*s, 100*s);
-                ctx.bezierCurveTo(60*s, 110*s, 80*s, 130*s, 96*s, 115*s);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.moveTo(96*s, 115*s);
-                ctx.bezierCurveTo(112*s, 100*s, 130*s, 90*s, 160*s, 140*s);
-                ctx.stroke();
-
-                return c.toDataURL('image/png');
+                return new Promise(function(resolve) {
+                    const svgStr = `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgE" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgE)"/>
+  <g stroke="#38BDF8" stroke-width="8" stroke-linecap="round" opacity="0.5">
+    <line x1="100" y1="128" x2="412" y2="128"/>
+    <line x1="100" y1="168" x2="412" y2="168"/>
+    <line x1="100" y1="208" x2="340" y2="208"/>
+  </g>
+  <path d="M 132 122 L 148 90 L 167 124 M 138 110 Q 150 106 159 110"
+        fill="none" stroke="#FACC15" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="100" y="272" width="140" height="140" rx="14" fill="none" stroke="#38BDF8" stroke-width="10"/>
+  <rect x="272" y="272" width="140" height="140" rx="14" fill="none" stroke="#38BDF8" stroke-width="10"/>
+  <path d="M 128 390 L 162 312 Q 165 305 170 313 L 208 386 M 138 364 Q 158 354 196 362"
+        fill="none" stroke="#FACC15" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+                    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+                    const url = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = function() {
+                        const c = document.createElement('canvas');
+                        c.width = size; c.height = size;
+                        c.getContext('2d').drawImage(img, 0, 0, size, size);
+                        URL.revokeObjectURL(url);
+                        resolve(c.toDataURL('image/png'));
+                    };
+                    img.onerror = function() {
+                        URL.revokeObjectURL(url);
+                        const c = document.createElement('canvas');
+                        c.width = size; c.height = size;
+                        const ctx = c.getContext('2d');
+                        ctx.fillStyle = '#1E293B';
+                        ctx.beginPath();
+                        ctx.roundRect(0, 0, size, size, size * 0.22);
+                        ctx.fill();
+                        resolve(c.toDataURL('image/png'));
+                    };
+                    img.src = url;
+                });
             }
 
-            const icon192 = makeIconDataURL(192);
-            const icon512 = makeIconDataURL(512);
+            Promise.all([makeIconDataURL(192), makeIconDataURL(512)]).then(function(icons) {
+            const icon192 = icons[0];
+            const icon512 = icons[1];
 
             // --- Web App Manifest を Blob URL で動的生成 ---
             const manifest = {
@@ -2627,6 +2647,7 @@ self.addEventListener('fetch', function(event) {
                         console.warn('[SW] 登録失敗 (file:// やローカルファイルでは動作しません):', err);
                     });
             }
+            }); // Promise.all end
         })();
         // ============================================================
         // PWA 対応 ここまで
