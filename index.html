@@ -2196,7 +2196,11 @@ document.addEventListener('fullscreenchange', function() {
                 document.querySelectorAll('.char-item.selected, .space-char.selected')
                     .forEach(el => el.classList.remove('selected'));
                 cursor.classList.remove('hidden');
+                shiftAnchorX = null;
             }
+
+            // Shift+上下選択時の基準X座標（始点文字のx中心）
+            let shiftAnchorX = null;
 
             window.addEventListener('keydown', function(e) {
                 // 入力フォーム等にフォーカスがある場合はスキップ（設定画面など）
@@ -2362,11 +2366,29 @@ document.addEventListener('fullscreenchange', function() {
                     case 'ArrowUp':
                         e.preventDefault();
                         if (selectionActive) {
-                            const allChars = Array.from(document.querySelectorAll('.char-item, .space-char'));
-                            const curPos = allChars.findIndex(el => el.parentNode === currentLine);
-                            if (curPos > 0) {
-                                const target = allChars[curPos - 1];
-                                updateSelectionRange(selectedEls[0] || target, target);
+                            if (currentLineIndex > 0) {
+                                // 始点要素を特定（まだ選択がなければカーソル直前の文字）
+                                let anchorEl = selectedEls.find(el => el.classList.contains('select-start'));
+                                if (!anchorEl) {
+                                    anchorEl = children[cursorIndex - 1] || children[0];
+                                }
+                                if (!anchorEl) break;
+                                // 基準X: 始点要素のx中心（初回確定、以降変わらない）
+                                if (shiftAnchorX === null) {
+                                    const r = anchorEl.getBoundingClientRect();
+                                    shiftAnchorX = (r.left + r.right) / 2;
+                                }
+                                // 上の行の文字群から基準Xに最も近い文字を選ぶ
+                                const prevLine = allLines[currentLineIndex - 1];
+                                const prevChars = Array.from(prevLine.querySelectorAll('.char-item, .space-char'));
+                                if (prevChars.length === 0) break;
+                                const target = prevChars.reduce((best, el) => {
+                                    const cx = (el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2;
+                                    const bx = (best.getBoundingClientRect().left + best.getBoundingClientRect().right) / 2;
+                                    return Math.abs(cx - shiftAnchorX) < Math.abs(bx - shiftAnchorX) ? el : best;
+                                });
+                                if (!anchorEl.classList.contains('select-start')) anchorEl.classList.add('select-start');
+                                updateSelectionRange(anchorEl, target);
                             }
                         } else if (currentLineIndex > 0) {
                             const prevLine = allLines[currentLineIndex - 1];
@@ -2384,11 +2406,29 @@ document.addEventListener('fullscreenchange', function() {
                     case 'ArrowDown':
                         e.preventDefault();
                         if (selectionActive) {
-                            const allChars = Array.from(document.querySelectorAll('.char-item, .space-char'));
-                            const curPos = allChars.findIndex(el => el.parentNode === currentLine);
-                            if (curPos >= 0 && curPos < allChars.length - 1) {
-                                const target = allChars[curPos + 1];
-                                updateSelectionRange(selectedEls[0] || target, target);
+                            if (currentLineIndex < allLines.length - 1) {
+                                // 始点要素を特定
+                                let anchorEl = selectedEls.find(el => el.classList.contains('select-start'));
+                                if (!anchorEl) {
+                                    anchorEl = children[cursorIndex - 1] || children[children.length - 2];
+                                }
+                                if (!anchorEl) break;
+                                // 基準X: 始点要素のx中心
+                                if (shiftAnchorX === null) {
+                                    const r = anchorEl.getBoundingClientRect();
+                                    shiftAnchorX = (r.left + r.right) / 2;
+                                }
+                                // 下の行の文字群から基準Xに最も近い文字を選ぶ
+                                const nextLine = allLines[currentLineIndex + 1];
+                                const nextChars = Array.from(nextLine.querySelectorAll('.char-item, .space-char'));
+                                if (nextChars.length === 0) break;
+                                const target = nextChars.reduce((best, el) => {
+                                    const cx = (el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2;
+                                    const bx = (best.getBoundingClientRect().left + best.getBoundingClientRect().right) / 2;
+                                    return Math.abs(cx - shiftAnchorX) < Math.abs(bx - shiftAnchorX) ? el : best;
+                                });
+                                if (!anchorEl.classList.contains('select-start')) anchorEl.classList.add('select-start');
+                                updateSelectionRange(anchorEl, target);
                             }
                         } else if (currentLineIndex < allLines.length - 1) {
                             const nextLine = allLines[currentLineIndex + 1];
@@ -2633,6 +2673,13 @@ self.addEventListener('fetch', function(event) {
                     });
             }
         })();
+
+            // Shiftキーが離れたら基準Xをリセット
+            window.addEventListener('keyup', function(e) {
+                if (e.key === 'Shift') {
+                    shiftAnchorX = null;
+                }
+            });
         // ============================================================
         // PWA 対応 ここまで
         // ============================================================
