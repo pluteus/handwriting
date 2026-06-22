@@ -2366,30 +2366,35 @@ document.addEventListener('fullscreenchange', function() {
                     case 'ArrowUp':
                         e.preventDefault();
                         if (selectionActive) {
-                            if (currentLineIndex > 0) {
-                                // 始点要素を特定（まだ選択がなければカーソル直前の文字）
-                                let anchorEl = selectedEls.find(el => el.classList.contains('select-start'));
-                                if (!anchorEl) {
-                                    anchorEl = children[cursorIndex - 1] || children[0];
-                                }
-                                if (!anchorEl) break;
-                                // 基準X: 始点要素のx中心（初回確定、以降変わらない）
-                                if (shiftAnchorX === null) {
-                                    const r = anchorEl.getBoundingClientRect();
-                                    shiftAnchorX = (r.left + r.right) / 2;
-                                }
-                                // 上の行の文字群から基準Xに最も近い文字を選ぶ
-                                const prevLine = allLines[currentLineIndex - 1];
-                                const prevChars = Array.from(prevLine.querySelectorAll('.char-item, .space-char'));
-                                if (prevChars.length === 0) break;
-                                const target = prevChars.reduce((best, el) => {
-                                    const cx = (el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2;
-                                    const bx = (best.getBoundingClientRect().left + best.getBoundingClientRect().right) / 2;
-                                    return Math.abs(cx - shiftAnchorX) < Math.abs(bx - shiftAnchorX) ? el : best;
-                                });
-                                if (!anchorEl.classList.contains('select-start')) anchorEl.classList.add('select-start');
-                                updateSelectionRange(anchorEl, target);
+                            // 始点要素を特定（まだ選択がなければカーソル直前の文字）
+                            let anchorEl = selectedEls.find(el => el.classList.contains('select-start'));
+                            if (!anchorEl) {
+                                anchorEl = children[cursorIndex - 1] || children[0];
                             }
+                            if (!anchorEl) break;
+                            // 基準X: 始点要素のx中心（初回確定、以降変わらない）
+                            if (shiftAnchorX === null) {
+                                const r = anchorEl.getBoundingClientRect();
+                                shiftAnchorX = (r.left + r.right) / 2;
+                            }
+                            // 現在の終点行を求める（選択中の末尾要素の親行、または始点行）
+                            const currentEndEl = selectedEls.length > 0
+                                ? selectedEls[selectedEls.length - 1]
+                                : anchorEl;
+                            const endLine = currentEndEl.parentNode;
+                            const endLineIndex = allLines.indexOf(endLine);
+                            if (endLineIndex <= 0) break;
+                            // 終点行の1つ上の行の文字群から基準Xに最も近い文字を選ぶ
+                            const targetLine = allLines[endLineIndex - 1];
+                            const targetChars = Array.from(targetLine.querySelectorAll('.char-item, .space-char'));
+                            if (targetChars.length === 0) break;
+                            const target = targetChars.reduce((best, el) => {
+                                const cx = (el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2;
+                                const bx = (best.getBoundingClientRect().left + best.getBoundingClientRect().right) / 2;
+                                return Math.abs(cx - shiftAnchorX) < Math.abs(bx - shiftAnchorX) ? el : best;
+                            });
+                            if (!anchorEl.classList.contains('select-start')) anchorEl.classList.add('select-start');
+                            updateSelectionRange(anchorEl, target);
                         } else if (currentLineIndex > 0) {
                             const prevLine = allLines[currentLineIndex - 1];
                             let baseLeft = cursor.getBoundingClientRect().left;
@@ -2406,30 +2411,35 @@ document.addEventListener('fullscreenchange', function() {
                     case 'ArrowDown':
                         e.preventDefault();
                         if (selectionActive) {
-                            if (currentLineIndex < allLines.length - 1) {
-                                // 始点要素を特定
-                                let anchorEl = selectedEls.find(el => el.classList.contains('select-start'));
-                                if (!anchorEl) {
-                                    anchorEl = children[cursorIndex - 1] || children[children.length - 2];
-                                }
-                                if (!anchorEl) break;
-                                // 基準X: 始点要素のx中心
-                                if (shiftAnchorX === null) {
-                                    const r = anchorEl.getBoundingClientRect();
-                                    shiftAnchorX = (r.left + r.right) / 2;
-                                }
-                                // 下の行の文字群から基準Xに最も近い文字を選ぶ
-                                const nextLine = allLines[currentLineIndex + 1];
-                                const nextChars = Array.from(nextLine.querySelectorAll('.char-item, .space-char'));
-                                if (nextChars.length === 0) break;
-                                const target = nextChars.reduce((best, el) => {
-                                    const cx = (el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2;
-                                    const bx = (best.getBoundingClientRect().left + best.getBoundingClientRect().right) / 2;
-                                    return Math.abs(cx - shiftAnchorX) < Math.abs(bx - shiftAnchorX) ? el : best;
-                                });
-                                if (!anchorEl.classList.contains('select-start')) anchorEl.classList.add('select-start');
-                                updateSelectionRange(anchorEl, target);
+                            // 始点要素を特定
+                            let anchorEl = selectedEls.find(el => el.classList.contains('select-start'));
+                            if (!anchorEl) {
+                                anchorEl = children[cursorIndex - 1] || children[children.length - 2];
                             }
+                            if (!anchorEl) break;
+                            // 基準X: 始点要素のx中心
+                            if (shiftAnchorX === null) {
+                                const r = anchorEl.getBoundingClientRect();
+                                shiftAnchorX = (r.left + r.right) / 2;
+                            }
+                            // 現在の終点行を求める（選択中の末尾要素の親行、または始点行）
+                            const currentEndEl = selectedEls.length > 0
+                                ? selectedEls[selectedEls.length - 1]
+                                : anchorEl;
+                            const endLine = currentEndEl.parentNode;
+                            const endLineIndex = allLines.indexOf(endLine);
+                            if (endLineIndex < 0 || endLineIndex >= allLines.length - 1) break;
+                            // 終点行の1つ下の行の文字群から基準Xに最も近い文字を選ぶ
+                            const targetLine = allLines[endLineIndex + 1];
+                            const targetChars = Array.from(targetLine.querySelectorAll('.char-item, .space-char'));
+                            if (targetChars.length === 0) break;
+                            const target = targetChars.reduce((best, el) => {
+                                const cx = (el.getBoundingClientRect().left + el.getBoundingClientRect().right) / 2;
+                                const bx = (best.getBoundingClientRect().left + best.getBoundingClientRect().right) / 2;
+                                return Math.abs(cx - shiftAnchorX) < Math.abs(bx - shiftAnchorX) ? el : best;
+                            });
+                            if (!anchorEl.classList.contains('select-start')) anchorEl.classList.add('select-start');
+                            updateSelectionRange(anchorEl, target);
                         } else if (currentLineIndex < allLines.length - 1) {
                             const nextLine = allLines[currentLineIndex + 1];
                             let baseLeft = cursor.getBoundingClientRect().left;
