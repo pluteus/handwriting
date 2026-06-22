@@ -1693,8 +1693,30 @@ document.addEventListener('fullscreenchange', function() {
         (function() {
             const displayArea = document.getElementById('displayArea');
             const inputArea = document.querySelector('.input-area');
-            
-            let displayHeight = window.innerHeight * (2/3);
+            const toolbar = document.getElementById('toolbar');
+
+            // デフォルト境界線Y:
+            //   画面最下部Y - (アプリ画面幅 - 改行ボタン幅) / 2
+            // → displayHeight = borderY - toolbarHeight
+            function calcDefaultDisplayHeight() {
+                const appH = window.innerHeight;
+                const appW = window.innerWidth;
+                const toolbarH = toolbar ? toolbar.offsetHeight : 0;
+                // --btn-size が設定される前の初期値は CSS デフォルト 48px
+                const btnSize = parseFloat(
+                    getComputedStyle(document.documentElement).getPropertyValue('--btn-size')
+                ) || 48;
+                // .buttons 列の実幅: ボタン幅 + input-area の左右 padding (10px×2)
+                const buttonsW = btnSize + 20;
+                // 手書きエリアの正方形一辺 = (画面幅 - ボタン幅) / 2
+                const inputSquareSide = (appW - buttonsW) / 2;
+                // 境界線の画面Y座標 = 画面高さ - 正方形一辺
+                const borderY = appH - inputSquareSide;
+                return Math.max(100, borderY - toolbarH);
+            }
+
+            let userMoved = false; // ユーザーがドラッグで動かしたか
+            let displayHeight = calcDefaultDisplayHeight();
             displayArea.style.flex = 'none';
             displayArea.style.height = displayHeight + 'px';
 
@@ -1724,6 +1746,7 @@ document.addEventListener('fullscreenchange', function() {
                 const maxH = window.innerHeight - 150;
                 newHeight = Math.max(minH, Math.min(maxH, newHeight));
                 
+                userMoved = true;
                 displayHeight = newHeight;
                 displayArea.style.height = displayHeight + 'px';
                 checkLayout(); 
@@ -1790,7 +1813,22 @@ document.addEventListener('fullscreenchange', function() {
             checkLayout();
             const ro = new ResizeObserver(checkLayout);
             ro.observe(inputArea);
-            window.addEventListener('resize', checkLayout);
+            window.addEventListener('resize', function() {
+                // 画面回転・リサイズ時: ユーザーが手動移動していなければデフォルトに戻す
+                if (!userMoved) {
+                    displayHeight = calcDefaultDisplayHeight();
+                    displayArea.style.height = displayHeight + 'px';
+                }
+                checkLayout();
+            });
+            window.addEventListener('orientationchange', function() {
+                userMoved = false; // 回転時は常にデフォルトへリセット
+                setTimeout(function() {
+                    displayHeight = calcDefaultDisplayHeight();
+                    displayArea.style.height = displayHeight + 'px';
+                    checkLayout();
+                }, 100);
+            });
 
             document.getElementById('btnFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
             document.getElementById('btnExitFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
@@ -2459,59 +2497,7 @@ document.addEventListener('fullscreenchange', function() {
 
         (function() {
 
-            // --- アイコン: SVGをCanvasにラスタライズしてPNG化 ---
-            function makeIconDataURL(size) {
-                return new Promise(function(resolve) {
-                    const svgStr = `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgE" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1E293B"/>
-      <stop offset="100%" stop-color="#0F172A"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bgE)"/>
-  <g stroke="#38BDF8" stroke-width="8" stroke-linecap="round" opacity="0.5">
-    <line x1="100" y1="128" x2="412" y2="128"/>
-    <line x1="100" y1="168" x2="412" y2="168"/>
-    <line x1="100" y1="208" x2="340" y2="208"/>
-  </g>
-  <path d="M 132 122 L 148 90 L 167 124 M 138 110 Q 150 106 159 110"
-        fill="none" stroke="#FACC15" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="100" y="272" width="140" height="140" rx="14" fill="none" stroke="#38BDF8" stroke-width="10"/>
-  <rect x="272" y="272" width="140" height="140" rx="14" fill="none" stroke="#38BDF8" stroke-width="10"/>
-  <path d="M 128 390 L 162 312 Q 165 305 170 313 L 208 386 M 138 364 Q 158 354 196 362"
-        fill="none" stroke="#FACC15" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-                    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
-                    const url = URL.createObjectURL(blob);
-                    const img = new Image();
-                    img.onload = function() {
-                        const c = document.createElement('canvas');
-                        c.width = size; c.height = size;
-                        c.getContext('2d').drawImage(img, 0, 0, size, size);
-                        URL.revokeObjectURL(url);
-                        resolve(c.toDataURL('image/png'));
-                    };
-                    img.onerror = function() {
-                        URL.revokeObjectURL(url);
-                        const c = document.createElement('canvas');
-                        c.width = size; c.height = size;
-                        const ctx = c.getContext('2d');
-                        ctx.fillStyle = '#1E293B';
-                        ctx.beginPath();
-                        ctx.roundRect(0, 0, size, size, size * 0.22);
-                        ctx.fill();
-                        resolve(c.toDataURL('image/png'));
-                    };
-                    img.src = url;
-                });
-            }
-
-            Promise.all([makeIconDataURL(192), makeIconDataURL(512)]).then(function(icons) {
-            const icon192 = icons[0];
-            const icon512 = icons[1];
-
-            // --- Web App Manifest を Blob URL で動的生成 ---
+            // --- アイコン: 同フォルダの icon.svg を直接参照 ---
             const manifest = {
                 name: '走り書きメモ',
                 short_name: '走り書き',
@@ -2522,8 +2508,7 @@ document.addEventListener('fullscreenchange', function() {
                 theme_color: '#f0f0f0',
                 orientation: 'any',
                 icons: [
-                    { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-                    { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+                    { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
                 ]
             };
 
@@ -2537,7 +2522,7 @@ document.addEventListener('fullscreenchange', function() {
             // Apple Touch Icon (ホーム画面アイコン用)
             const appleIcon = document.createElement('link');
             appleIcon.rel  = 'apple-touch-icon';
-            appleIcon.href = icon192;
+            appleIcon.href = 'icon.svg';
             document.head.appendChild(appleIcon);
 
             // --- Service Worker をインラインで文字列化して data: URI 登録 ---
@@ -2647,7 +2632,6 @@ self.addEventListener('fetch', function(event) {
                         console.warn('[SW] 登録失敗 (file:// やローカルファイルでは動作しません):', err);
                     });
             }
-            }); // Promise.all end
         })();
         // ============================================================
         // PWA 対応 ここまで
