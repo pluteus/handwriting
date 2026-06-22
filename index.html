@@ -2377,15 +2377,28 @@ document.addEventListener('fullscreenchange', function() {
                                 const r = anchorEl.getBoundingClientRect();
                                 shiftAnchorX = (r.left + r.right) / 2;
                             }
-                            // 現在の終点行を求める（選択中の末尾要素の親行、または始点行）
-                            const currentEndEl = selectedEls.length > 0
-                                ? selectedEls[selectedEls.length - 1]
-                                : anchorEl;
-                            const endLine = currentEndEl.parentNode;
-                            const endLineIndex = allLines.indexOf(endLine);
-                            if (endLineIndex <= 0) break;
-                            // 終点行の1つ上の行の文字群から基準Xに最も近い文字を選ぶ
-                            const targetLine = allLines[endLineIndex - 1];
+                            // 全要素リストでの始点インデックス
+                            const allCharsUp = Array.from(zoomContainer.querySelectorAll('.char-item, .space-char'));
+                            const anchorIdx = allCharsUp.indexOf(anchorEl);
+                            // 現在の終点行を求める:
+                            //   上方向選択中は selectedEls[0] が終点（anchorより上にある）
+                            //   まだ選択がなければ anchorEl の行が終点行
+                            let endLineIndexUp;
+                            if (selectedEls.length > 0) {
+                                const firstIdx = allCharsUp.indexOf(selectedEls[0]);
+                                if (firstIdx < anchorIdx) {
+                                    // 上方向に選択済み → 先頭要素が終点
+                                    endLineIndexUp = allLines.indexOf(selectedEls[0].parentNode);
+                                } else {
+                                    // 下方向or同行に選択済み → 末尾要素が終点
+                                    endLineIndexUp = allLines.indexOf(selectedEls[selectedEls.length - 1].parentNode);
+                                }
+                            } else {
+                                endLineIndexUp = allLines.indexOf(anchorEl.parentNode);
+                            }
+                            if (endLineIndexUp <= 0) break;
+                            // 終点行の1つ上の行から基準Xに最も近い文字を終点に
+                            const targetLine = allLines[endLineIndexUp - 1];
                             const targetChars = Array.from(targetLine.querySelectorAll('.char-item, .space-char'));
                             if (targetChars.length === 0) break;
                             const target = targetChars.reduce((best, el) => {
