@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgE" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgE)"/>
+
+  <!-- 上半分: 罫線エリア -->
+  <g stroke="#38BDF8" stroke-width="8" stroke-linecap="round" opacity="0.5">
+    <line x1="100" y1="128" x2="412" y2="128"/>
+    <line x1="100" y1="168" x2="412" y2="168"/>
+    <line x1="100" y1="208" x2="340" y2="208"/>
+  </g>
+  <!-- 罫線1行目に書かれた小さなA -->
+  <path d="M 132 122 L 148 90 L 167 124 M 138 110 Q 150 106 159 110"
+        fill="none" stroke="#FACC15" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 下半分: 左右2マス -->
+  <rect x="100" y="272" width="140" height="140" rx="14" fill="none" stroke="#38BDF8" stroke-width="10"/>
+  <rect x="272" y="272" width="140" height="140" rx="14" fill="none" stroke="#38BDF8" stroke-width="10"/>
+
+  <!-- 左マスに手書き中の「A」（不揃いな線で手書き感） -->
+  <path d="M 128 390 L 162 312 Q 165 305 170 313 L 208 386
+           M 138 364 Q 158 354 196 362"
+        fill="none" stroke="#FACC15" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
