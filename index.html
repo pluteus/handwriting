@@ -1071,6 +1071,9 @@ function redo() {
 
             scrollCursorIntoView();
             updateActiveState();
+        }
+
+        function finalizeAll() {
             if (hasDrawing1) finalizeCharacter(1);
             if (hasDrawing2) finalizeCharacter(2);
         }
