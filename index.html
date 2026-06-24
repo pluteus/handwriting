@@ -554,6 +554,30 @@ const MAX_HISTORY = 100;
         ctx2.lineJoin = 'round';
 
 // ============================================================
+// カーソルを表示エリア内に収めるスクロール
+// ============================================================
+function scrollCursorIntoView() {
+    // DOM更新後に測定するため1フレーム待つ
+    requestAnimationFrame(function() {
+        const cur = document.getElementById('cursor');
+        if (!cur) return;
+
+        const areaRect = displayArea.getBoundingClientRect();
+        const curRect  = cur.getBoundingClientRect();
+
+        // 上にはみ出ている
+        if (curRect.top < areaRect.top) {
+            displayArea.scrollTop -= (areaRect.top - curRect.top) + 8;
+        }
+        // 下にはみ出ている
+        else if (curRect.bottom > areaRect.bottom) {
+            displayArea.scrollTop += (curRect.bottom - areaRect.bottom) + 8;
+        }
+    });
+}
+// ============================================================
+
+// ============================================================
 // ローカル保存 / 復元
 // ============================================================
 const LS_KEY = 'hashirigaki-memo-content';
@@ -1045,11 +1069,8 @@ function redo() {
                 strokes2 = [];
             }
 
-            displayArea.scrollTop = displayArea.scrollHeight;
+            scrollCursorIntoView();
             updateActiveState();
-        }
-
-        function finalizeAll() {
             if (hasDrawing1) finalizeCharacter(1);
             if (hasDrawing2) finalizeCharacter(2);
         }
@@ -1498,6 +1519,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             if (internalClipboard.length === 0) return;
             replaceSelectionWithCursor(); 
             pasteFromClipboard();
+            scrollCursorIntoView();
         });
 
         document.getElementById('btnSpace').addEventListener('click', function() {
@@ -1506,6 +1528,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const space = document.createElement('span');
             space.className = 'space-char';
             currentLine.insertBefore(space, cursor);
+            scrollCursorIntoView();
         });
 
         document.getElementById('btnEnter').addEventListener('click', function() {
@@ -1544,7 +1567,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
             setupLineTapEvents();
 
-            displayArea.scrollTop = displayArea.scrollHeight;
+            scrollCursorIntoView();
         });
 
         // === ツールバー機能 ===
@@ -2401,6 +2424,7 @@ document.addEventListener('fullscreenchange', function() {
                                 currentLine = prevLine;
                             }
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'ArrowRight':
@@ -2438,6 +2462,7 @@ document.addEventListener('fullscreenchange', function() {
                                 currentLine = nextLine;
                             }
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'ArrowUp':
@@ -2496,6 +2521,7 @@ document.addEventListener('fullscreenchange', function() {
                             }
                             moveCursorToNearestPosition(prevLine, baseLeft);
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'ArrowDown':
@@ -2541,6 +2567,7 @@ document.addEventListener('fullscreenchange', function() {
                             }
                             moveCursorToNearestPosition(nextLine, baseLeft);
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'Backspace':
@@ -2568,6 +2595,7 @@ document.addEventListener('fullscreenchange', function() {
                             currentLine.id = 'currentLine';
                             setupLineTapEvents();
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'Delete':
@@ -2583,6 +2611,7 @@ document.addEventListener('fullscreenchange', function() {
                             nextLine.remove();
                             setupLineTapEvents();
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'Enter':
@@ -2605,6 +2634,7 @@ document.addEventListener('fullscreenchange', function() {
                             space.className = 'space-char';
                             currentLine.insertBefore(space, cursor);
                         }
+                        scrollCursorIntoView();
                         break;
 
                     case 'PageUp':
