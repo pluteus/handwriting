@@ -476,6 +476,7 @@
                 </div>
             </div>
             <button class="settings-close" id="btnCloseSettings">閉じる</button>
+            <button class="settings-close" id="btnClearMemo" style="margin-top:8px; background:#e94560;">メモをクリア</button>
         </div>
     </div>
 
@@ -552,11 +553,71 @@ const MAX_HISTORY = 100;
         ctx2.lineCap = 'round';
         ctx2.lineJoin = 'round';
 
+// ============================================================
+// ローカル保存 / 復元
+// ============================================================
+const LS_KEY = 'hashirigaki-memo-content';
+
+function saveToLocalStorage() {
+    try {
+        const zc = document.getElementById('zoomContainer');
+        if (zc) localStorage.setItem(LS_KEY, zc.innerHTML);
+    } catch (e) {
+        // ストレージ容量超過などは無視
+        console.warn('[保存] localStorage への保存に失敗:', e);
+    }
+}
+
+function loadFromLocalStorage() {
+    try {
+        const saved = localStorage.getItem(LS_KEY);
+        if (!saved) return;
+
+        const zc = document.getElementById('zoomContainer');
+        if (!zc) return;
+        zc.innerHTML = saved;
+        rebuildReferences();
+
+        // カーソルが復元されなかった場合は末尾行に追加
+        if (!document.getElementById('cursor')) {
+            const allLines = document.querySelectorAll('.line');
+            const lastLine = allLines[allLines.length - 1] || zc.querySelector('.line');
+            if (lastLine) {
+                const cur = document.createElement('span');
+                cur.className = 'cursor';
+                cur.id = 'cursor';
+                lastLine.appendChild(cur);
+                lastLine.id = 'currentLine';
+                cursor = cur;
+                currentLine = lastLine;
+                rebuildReferences();
+            }
+        }
+
+        // 復元後に表示エリアを末尾にスクロール
+        requestAnimationFrame(function() {
+            displayArea.scrollTop = displayArea.scrollHeight;
+        });
+    } catch (e) {
+        console.warn('[復元] localStorage からの読み込みに失敗:', e);
+    }
+}
+
+// アプリ終了・バックグラウンド移行時に保存
+window.addEventListener('beforeunload', saveToLocalStorage);
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+        saveToLocalStorage();
+    }
+});
+// ============================================================
+
 function saveHistory() {
     redoStack = [];
+    const zc = document.getElementById('zoomContainer');
 
     undoStack.push({
-        html: zoomContainer.innerHTML,
+        html: zc.innerHTML,
         currentLineIndex: Array.from(
             document.querySelectorAll('.line')
         ).indexOf(currentLine)
@@ -565,6 +626,9 @@ function saveHistory() {
     if (undoStack.length > MAX_HISTORY) {
         undoStack.shift();
     }
+
+    // 変更のたびにローカル保存
+    saveToLocalStorage();
 }
 function rebuildReferences() {
     const lines = document.querySelectorAll('.line');
@@ -578,14 +642,16 @@ function rebuildReferences() {
     setupLineTapEvents();
 }
 function restoreState(state) {
-    zoomContainer.innerHTML = state.html;
+    const zc = document.getElementById('zoomContainer');
+    zc.innerHTML = state.html;
     rebuildReferences();
 }
 function undo() {
     if (undoStack.length === 0) return;
+    const zc = document.getElementById('zoomContainer');
 
     redoStack.push({
-        html: zoomContainer.innerHTML
+        html: zc.innerHTML
     });
 
     const state = undoStack.pop();
@@ -593,9 +659,10 @@ function undo() {
 }
 function redo() {
     if (redoStack.length === 0) return;
+    const zc = document.getElementById('zoomContainer');
 
     undoStack.push({
-        html: zoomContainer.innerHTML
+        html: zc.innerHTML
     });
 
     const state = redoStack.pop();
@@ -1616,6 +1683,16 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             }
         });
 
+        // メモをクリア
+        document.getElementById('btnClearMemo').addEventListener('click', function() {
+            if (!confirm('メモの内容をすべて削除します。よろしいですか？')) return;
+            const zc = document.getElementById('zoomContainer');
+            zc.innerHTML = '<div class="line" id="currentLine"><span class="cursor" id="cursor"></span></div>';
+            rebuildReferences();
+            localStorage.removeItem(LS_KEY);
+            settingsOverlay.classList.remove('show');
+        });
+
         // フルスクリーン
 document.getElementById('btnFullscreen').addEventListener('click', async function() {
     document.body.classList.add('fullscreen');
@@ -2543,6 +2620,12 @@ document.addEventListener('fullscreenchange', function() {
             });
         })();
         // === ここまで追加：キーボードイベント制御（コピペ対応版） ===
+
+        // ============================================================
+        // 起動時: ローカル保存データを復元
+        // ============================================================
+        loadFromLocalStorage();
+        // ============================================================
 
         // ============================================================
         // PWA対応: マニフェスト動的生成 ＋ Service Worker インライン登録
