@@ -2721,111 +2721,26 @@ document.addEventListener('fullscreenchange', function() {
             appleIcon.href = 'icon.svg';
             document.head.appendChild(appleIcon);
 
-            // --- Service Worker をインラインで文字列化して data: URI 登録 ---
-            // 注意: Blob URL は再読み込みのたびに違うURLになり、ブラウザがSWを
-            // 安定して再認識できずオフライン起動に失敗する原因になっていた。
-            // data: URI は同一HTMLから常に同じ文字列が生成されるため、
-            // ブラウザは「同じSW」として正しく扱える。
-            const SW_VERSION = 'v2';
-            const SW_CACHE_NAME = 'hashirigaki-memo-' + SW_VERSION;
-
-            // 自分自身（index.html）の完全なHTMLソースを文字列として埋め込む。
-            // self.location.pathname だけではオフライン初回起動時に
-            // 「キャッシュすべき実体」を取得できないため、ページ自身の
-            // outerHTML を直接 Service Worker に渡してキャッシュさせる。
-            const pageHTML = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-            const pageURL = self.location.href.split('#')[0].split('?')[0];
-
-            const swCode = `
-const CACHE_NAME = '${SW_CACHE_NAME}';
-const PAGE_URL = ${JSON.stringify(pageURL)};
-const PAGE_HTML = ${JSON.stringify(pageHTML)};
-
-// インストール時: 自分自身（index.html）の中身を直接キャッシュへ書き込む
-self.addEventListener('install', function(event) {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then(function(cache) {
-            const response = new Response(PAGE_HTML, {
-                headers: { 'Content-Type': 'text/html; charset=UTF-8' }
-            });
-            return cache.put(PAGE_URL, response);
-        }).then(function() {
-            return self.skipWaiting();
-        })
-    );
-});
-
-// アクティベート時: 古いキャッシュを削除
-self.addEventListener('activate', function(event) {
-    event.waitUntil(
-        caches.keys().then(function(keys) {
-            return Promise.all(
-                keys.filter(function(k) { return k !== CACHE_NAME; })
-                    .map(function(k) { return caches.delete(k); })
-            );
-        }).then(function() {
-            return self.clients.claim();
-        })
-    );
-});
-
-// フェッチ: ページ本体（ナビゲーション）は常にキャッシュ優先でオフライン保証。
-// それ以外はネットワーク優先、失敗時はキャッシュへフォールバック。
-self.addEventListener('fetch', function(event) {
-    if (event.request.method !== 'GET') return;
-
-    // ページの読み込み（アプリ起動）はオフラインでも必ず開けるようにする
-    if (event.request.mode === 'navigate') {
-        event.respondWith(
-            caches.match(PAGE_URL).then(function(cached) {
-                if (cached) return cached;
-                return fetch(event.request).catch(function() {
-                    return caches.match(PAGE_URL);
-                });
-            })
-        );
-        return;
-    }
-
-    event.respondWith(
-        caches.match(event.request).then(function(cached) {
-            if (cached) return cached;
-            return fetch(event.request).then(function(response) {
-                if (response && response.status === 200) {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(function(cache) {
-                        cache.put(event.request, clone);
-                    });
-                }
-                return response;
-            }).catch(function() {
-                return caches.match(PAGE_URL);
-            });
-        })
-    );
-});
-`;
-
+            // --- Service Worker を外部ファイル sw.js として登録 ---
+            // data:/Blob URI 方式はブラウザのセキュリティポリシーで拒否されるため、
+            // index.html と同じディレクトリに置いた sw.js を登録する。
             if ('serviceWorker' in navigator) {
-                const swDataURL = 'data:application/javascript;charset=utf-8,' + encodeURIComponent(swCode);
-                navigator.serviceWorker.register(swDataURL, { scope: './' })
+                navigator.serviceWorker.register('./sw.js', { scope: './' })
                     .then(function(reg) {
                         console.log('[SW] 登録成功:', reg.scope);
-                        // 既存のSWが控えている場合、新しいバージョンが
-                        // インストールされ次第すぐ有効化されるようにする
                         reg.addEventListener('updatefound', function() {
                             const newWorker = reg.installing;
                             if (newWorker) {
                                 newWorker.addEventListener('statechange', function() {
                                     if (newWorker.state === 'activated') {
-                                        console.log('[SW] 新しいキャッシュに更新されました');
+                                        console.log('[SW] 新バージョンのキャッシュ完了');
                                     }
                                 });
                             }
                         });
                     })
                     .catch(function(err) {
-                        console.warn('[SW] 登録失敗 (file:// やローカルファイルでは動作しません):', err);
+                        console.warn('[SW] 登録失敗:', err);
                     });
             }
         })();
