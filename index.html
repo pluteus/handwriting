@@ -413,8 +413,6 @@
         }
 
         body.fullscreen .display-area {
-            flex: 1;
-            height: auto;
             padding: 10px;
         }
 
@@ -1736,36 +1734,9 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             settingsOverlay.classList.remove('show');
         });
 
-        // フルスクリーン
-document.getElementById('btnFullscreen').addEventListener('click', async function() {
-    document.body.classList.add('fullscreen');
-
-    try {
-        if (!document.fullscreenElement) {
-            await document.documentElement.requestFullscreen();
-        }
-    } catch (e) {
-        console.log(e);
-    }
-});
-document.getElementById('btnExitFullscreen').addEventListener('click', async function() {
-    document.body.classList.remove('fullscreen');
-
-    try {
-        if (document.fullscreenElement) {
-            await document.exitFullscreen();
-        }
-    } catch (e) {
-        console.log(e);
-    }
-});
-document.addEventListener('fullscreenchange', function() {
-    if (!document.fullscreenElement) {
-        document.body.classList.remove('fullscreen');
-    }
-});
+        // フルスクリーン（ハンドラはIIFE内に移動）
         document.body.addEventListener('touchmove', function(e) {
-            if (document.body.classList.contains('fullscreen')) {
+            if (document.body.classList.contains('fullscreen') && !window._dividerDragging) {
                 e.preventDefault();
             }
         }, { passive: false });
@@ -1844,15 +1815,30 @@ document.addEventListener('fullscreenchange', function() {
             let startY = 0;
             let startHeight = 0;
 
+            // displayAreaの他のtouchハンドラからも参照できるよう外部変数に公開
+            window._dividerDragging = false;
+
+            // input-area が必要とする最小高さ（ボタン4個が最小サイズ(40px)で収まる高さ＋パディング）
+            // これは displayHeight に依存しない固定値として扱う。
+            // doResize 内で inputArea.offsetHeight をそのまま使うと、
+            // input-area が flex:1 で「残りスペース」を取る構造のため
+            // displayHeight → inputH → maxH → displayHeight という循環参照になり、
+            // クリック1回でも境界線が暴走して動かなくなる不具合の原因になっていた。
+            const MIN_INPUT_AREA_H = 40 + (10 * 2); // 最小ボタンサイズ + 上下padding
+
             function startResize(e) {
                 const rect = displayArea.getBoundingClientRect();
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                // フルスクリーン時など rect.bottom が window.innerHeight を超えることがあるため
+                // 実際に画面内に収まる値にクランプして判定する
+                const effectiveBottom = Math.min(rect.bottom, window.innerHeight);
                 
-                if (rect.bottom - clientY <= 15) {
+                if (effectiveBottom - clientY <= 15 && clientY >= rect.top) {
                     isDragging = true;
+                    window._dividerDragging = true;
                     startY = clientY;
                     startHeight = displayArea.offsetHeight;
-                    if (!e.touches) e.preventDefault();
+                    e.preventDefault();
                 }
             }
 
@@ -1863,7 +1849,11 @@ document.addEventListener('fullscreenchange', function() {
                 
                 let newHeight = startHeight + deltaY;
                 const minH = 100;
-                const maxH = window.innerHeight - 150;
+                // toolbar はフルスクリーン中は非表示(高さ0)なので毎回実測する。
+                // input-area 側は displayHeight に依存しない固定の最小高さを使うことで
+                // 循環参照（displayHeight → inputH → maxH）を断ち切る。
+                const toolbarH = toolbar ? toolbar.offsetHeight : 0;
+                const maxH = window.innerHeight - toolbarH - MIN_INPUT_AREA_H;
                 newHeight = Math.max(minH, Math.min(maxH, newHeight));
                 
                 userMoved = true;
@@ -1874,13 +1864,14 @@ document.addEventListener('fullscreenchange', function() {
 
             function endResize() {
                 isDragging = false;
+                window._dividerDragging = false;
             }
 
             displayArea.addEventListener('mousedown', startResize);
             window.addEventListener('mousemove', doResize);
             window.addEventListener('mouseup', endResize);
 
-            displayArea.addEventListener('touchstart', startResize, { passive: true });
+            displayArea.addEventListener('touchstart', startResize, { passive: false });
             window.addEventListener('touchmove', function(e) {
                 if (isDragging) {
                     e.preventDefault(); 
@@ -1888,19 +1879,15 @@ document.addEventListener('fullscreenchange', function() {
                 }
             }, { passive: false });
             window.addEventListener('touchend', endResize);
+            window.addEventListener('touchcancel', endResize);
 
 
             const PADDING = 10 * 2;
             const GAP = 8;
 
             function checkLayout() {
-                if (document.body.classList.contains('fullscreen')) {
-                    displayArea.style.height = 'auto';
-                    displayArea.style.flex = '1';
-                } else {
-                    displayArea.style.flex = 'none';
-                    displayArea.style.height = displayHeight + 'px';
-                }
+                displayArea.style.flex = 'none';
+                displayArea.style.height = displayHeight + 'px';
 
                 const totalH = inputArea.clientHeight;
                 const finalH = Math.max(40, totalH - PADDING);
@@ -1950,8 +1937,57 @@ document.addEventListener('fullscreenchange', function() {
                 }, 100);
             });
 
-            document.getElementById('btnFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
-            document.getElementById('btnExitFullscreen').addEventListener('click', () => setTimeout(checkLayout, 50));
+            // フルスクリーン時の初期高さを再計算する共通関数
+            // requestFullscreen() の完了直後はブラウザによって window.innerHeight が
+            // まだ更新されていないことがあるため、2フレーム分待って計算する
+            function recalcFullscreenHeight() {
+                requestAnimationFrame(function() {
+                    requestAnimationFrame(function() {
+                        const inputH = document.querySelector('.input-area').offsetHeight;
+                        displayHeight = window.innerHeight - inputH;
+                        userMoved = false;
+                        checkLayout();
+                    });
+                });
+            }
+
+            // フルスクリーン ボタンハンドラ（IIFEスコープ内で displayHeight/userMoved/checkLayout に正しくアクセス）
+            document.getElementById('btnFullscreen').addEventListener('click', async function() {
+                document.body.classList.add('fullscreen');
+                try {
+                    if (!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                    }
+                } catch (e) { console.log(e); }
+                // requestFullscreen完了後（resolve後）に高さを再計算することで
+                // window.innerHeight が確実にフルスクリーン後の値になっている状態で計算する
+                recalcFullscreenHeight();
+            });
+
+            document.getElementById('btnExitFullscreen').addEventListener('click', async function() {
+                document.body.classList.remove('fullscreen');
+                displayHeight = calcDefaultDisplayHeight();
+                userMoved = false;
+                checkLayout();
+                try {
+                    if (document.fullscreenElement) {
+                        await document.exitFullscreen();
+                    }
+                } catch (e) { console.log(e); }
+            });
+
+            document.addEventListener('fullscreenchange', function() {
+                if (document.fullscreenElement) {
+                    // フルスクリーンに入った（ブラウザのF11等、ボタン以外の経路も含む）
+                    document.body.classList.add('fullscreen');
+                    recalcFullscreenHeight();
+                } else {
+                    document.body.classList.remove('fullscreen');
+                    displayHeight = calcDefaultDisplayHeight();
+                    userMoved = false;
+                    checkLayout();
+                }
+            });
         })();
         // === displayArea タッチ＆マウスドラッグ統合制御（クリック時選択解除対応版） ===
         (function() {
@@ -2193,7 +2229,10 @@ document.addEventListener('fullscreenchange', function() {
 
             // === タッチイベント制御（既存処理の維持） ===
             displayArea.addEventListener('touchstart', function(e) {
-                if (e.target === displayArea && displayArea.offsetHeight - (e.touches[0].clientY - displayArea.getBoundingClientRect().top) <= 15) {
+                if (window._dividerDragging) return;
+                const _daRect = displayArea.getBoundingClientRect();
+                const _effectiveBottom = Math.min(_daRect.bottom, window.innerHeight);
+                if (_effectiveBottom - e.touches[0].clientY <= 15 && e.touches[0].clientY >= _daRect.top) {
                     return;
                 }
 
@@ -2237,6 +2276,7 @@ document.addEventListener('fullscreenchange', function() {
             }, { passive: false });
 
             displayArea.addEventListener('touchmove', function(e) {
+                if (window._dividerDragging) return;
                 if (mode === 'idle' || mode === 'mouse_selecting') return;
                 e.preventDefault();
 
@@ -2284,6 +2324,7 @@ document.addEventListener('fullscreenchange', function() {
             }, { passive: false });
 
             displayArea.addEventListener('touchend', function(e) {
+                if (window._dividerDragging) return;
                 if (e.touches.length === 0) {
                     if (mode === 'longpress_pending') {
                         cancelLongPress();
