@@ -564,14 +564,24 @@ function scrollCursorIntoView() {
 
         const areaRect = displayArea.getBoundingClientRect();
         const curRect  = cur.getBoundingClientRect();
+        const margin   = 8; // px：端からの余白
 
-        // 上にはみ出ている
+        // 縦：上にはみ出ている
         if (curRect.top < areaRect.top) {
-            displayArea.scrollTop -= (areaRect.top - curRect.top) + 8;
+            displayArea.scrollTop -= (areaRect.top - curRect.top) + margin;
         }
-        // 下にはみ出ている
+        // 縦：下にはみ出ている
         else if (curRect.bottom > areaRect.bottom) {
-            displayArea.scrollTop += (curRect.bottom - areaRect.bottom) + 8;
+            displayArea.scrollTop += (curRect.bottom - areaRect.bottom) + margin;
+        }
+
+        // 横：左にはみ出ている
+        if (curRect.left < areaRect.left) {
+            displayArea.scrollLeft -= (areaRect.left - curRect.left) + margin;
+        }
+        // 横：右にはみ出ている
+        else if (curRect.right > areaRect.right) {
+            displayArea.scrollLeft += (curRect.right - areaRect.right) + margin;
         }
     });
 }
