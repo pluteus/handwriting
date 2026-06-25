@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>走り書きメモ — 手書き文字でメモを作るウェブアプリ</title>
+<meta name="description" content="走り書きメモは、スマートフォンやタブレットの画面に指で文字を書き、そのまま並べてメモを作成できるウェブアプリです。インストール不要。">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  /* ===== トークン ===== */
+  :root {
+    --ink:       #1a1a2e;
+    --ink-light: #3d3d5c;
+    --ruled:     #d6e4f0;
+    --ruled-mid: #b8cfe6;
+    --paper:     #f7f4ef;
+    --paper-mid: #ede8e0;
+    --accent:    #e94560;
+    --accent-dk: #b5293e;
+    --serif: 'Noto Serif JP', serif;
+    --sans:  'Noto Sans JP', sans-serif;
+  }
+
+  /* ===== リセット ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.8;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ===== 罫線テクスチャ（シグネチャ要素）===== */
+  .ruled-bg {
+    background-image:
+      repeating-linear-gradient(
+        transparent,
+        transparent 39px,
+        var(--ruled) 39px,
+        var(--ruled) 40px
+      );
+    background-size: 100% 40px;
+  }
+
+  /* ===== ヘッダー ===== */
+  header {
+    background: var(--ink);
+    color: #fff;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .header-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 60px 24px 48px;
+    position: relative;
+    z-index: 1;
+  }
+  .header-eyebrow {
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    color: var(--ruled-mid);
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .header-desc {
+    font-size: 1.05rem;
+    color: #c0bdd8;
+    max-width: 560px;
+    line-height: 1.9;
+    margin-bottom: 36px;
+  }
+  .header-cta {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 14px 32px;
+    border-radius: 2px;
+    transition: background 0.2s;
+  }
+  .header-cta:hover { background: var(--accent-dk); text-decoration: none; }
+
+  /* 背景の罫線アニメーション */
+  .header-lines {
+    position: absolute;
+    inset: 0;
+    opacity: 0.07;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      transparent, transparent 39px,
+      #fff 39px, #fff 40px
+    );
+  }
+
+  /* ===== ナビ ===== */
+  nav {
+    background: var(--paper-mid);
+    border-bottom: 1px solid var(--ruled-mid);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav-inner a {
+    font-size: 0.85rem;
+    color: var(--ink-light);
+    padding: 14px 16px;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .nav-inner a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* ===== セクション共通 ===== */
+  section {
+    padding: 72px 24px;
+  }
+  .section-inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .section-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: clamp(1.5rem, 4vw, 2.2rem);
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 20px;
+  }
+  .section-lead {
+    font-size: 1.05rem;
+    color: var(--ink-light);
+    max-width: 640px;
+    margin-bottom: 48px;
+  }
+
+  /* ===== 概要（ライブデモ風） ===== */
+  #overview {
+    background: var(--paper);
+  }
+  .overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+  }
+  @media (max-width: 640px) {
+    .overview-grid { grid-template-columns: 1fr; }
+  }
+  .mockup {
+    background: #fff;
+    border: 1px solid var(--ruled-mid);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(26,26,46,0.10);
+  }
+  .mockup-toolbar {
+    background: var(--ink);
+    padding: 8px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .mockup-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .mockup-dot.r { background: #e94560; }
+  .mockup-dot.y { background: #f0b429; }
+  .mockup-dot.g { background: #2fd97c; }
+  .mockup-title {
+    color: #ccc;
+    font-size: 0.72rem;
+    margin-left: 8px;
+  }
+  .mockup-ruled {
+    padding: 16px;
+    background-image: repeating-linear-gradient(
+      transparent, transparent 39px,
+      var(--ruled) 39px, var(--ruled) 40px
+    );
+    min-height: 200px;
+  }
+  .mockup-line {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  /* 手書き文字を模したブロック */
+  .char-block {
+    width: 30px; height: 30px;
+    border-radius: 2px;
+    background: var(--ink);
+    opacity: 0.85;
+    position: relative;
+    overflow: hidden;
+  }
+  .char-block::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 1px;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent, transparent 3px,
+      rgba(255,255,255,0.15) 3px, rgba(255,255,255,0.15) 4px
+    );
+  }
+  .char-block.sm { width: 24px; }
+  .char-block.sp { width: 12px; background: transparent; }
+  .cursor-bar {
+    width: 2px;
+    height: 30px;
+    background: var(--accent);
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; } 50% { opacity: 0; }
+  }
+  .overview-text h3 {
+    font-family: var(--serif);
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+  }
+  .overview-text p { color: var(--ink-light); margin-bottom: 16px; }
+
+  /* ===== 機能 ===== */
+  #features {
+    background: var(--paper-mid);
+  }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+  }
+  .feature-card {
+    background: var(--paper);
+    border: 1px solid var(--ruled-mid);
+    border-radius: 4px;
+    padding: 28px 24px;
+    position: relative;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s;
+    border-radius: 4px 4px 0 0;
+  }
+  .feature-card:hover::before { transform: scaleX(1); }
+  .feature-icon {
+    font-size: 2rem;
+    margin-bottom: 14px;
+    line-height: 1;
+  }
+  .feature-card h3 {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    margin-bottom: 10px;
+  }
+  .feature-card p {
+    font-size: 0.9rem;
+    color: var(--ink-light);
+    line-height: 1.75;
+  }
+
+  /* ===== 使い方 ===== */
+  #howto {
+    background: var(--paper);
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 32px;
+    counter-reset: step;
+  }
+  .step {
+    counter-increment: step;
+    padding-top: 20px;
+    border-top: 1px solid var(--ruled-mid);
+    position: relative;
+  }
+  .step::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: var(--serif);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--ruled-mid);
+    display: block;
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+  .step h3 {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .step p {
+    font-size: 0.88rem;
+    color: var(--ink-light);
+    line-height: 1.75;
+  }
+
+  /* ===== 対応環境 ===== */
+  #environments {
+    background: var(--ink);
+    color: #fff;
+  }
+  #environments h2 { color: #fff; }
+  #environments .section-lead { color: var(--ruled-mid); }
+  .env-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .env-card {
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px;
+    padding: 24px 20px;
+  }
+  .env-icon { font-size: 1.8rem; margin-bottom: 10px; }
+  .env-card h3 { font-size: 0.95rem; color: #fff; margin-bottom: 6px; }
+  .env-card p { font-size: 0.85rem; color: var(--ruled-mid); line-height: 1.7; }
+
+  /* ===== FAQ ===== */
+  #faq {
+    background: var(--paper-mid);
+  }
+  .faq-list { max-width: 680px; }
+  details {
+    border-bottom: 1px solid var(--ruled-mid);
+    padding: 20px 0;
+  }
+  summary {
+    font-weight: 500;
+    font-size: 0.98rem;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after {
+    content: '+';
+    font-size: 1.4rem;
+    font-weight: 300;
+    color: var(--accent);
+    flex-shrink: 0;
+    transition: transform 0.2s;
+  }
+  details[open] summary::after { transform: rotate(45deg); }
+  .faq-ans {
+    font-size: 0.92rem;
+    color: var(--ink-light);
+    line-height: 1.85;
+    margin-top: 14px;
+    padding-left: 0;
+  }
+
+  /* ===== CTA ===== */
+  #cta {
+    background: var(--paper);
+    text-align: center;
+  }
+  .cta-box {
+    background: var(--ink);
+    color: #fff;
+    border-radius: 4px;
+    padding: 60px 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-box::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      transparent, transparent 39px,
+      rgba(255,255,255,0.04) 39px, rgba(255,255,255,0.04) 40px
+    );
+    pointer-events: none;
+  }
+  .cta-box h2 {
+    color: #fff;
+    margin-bottom: 16px;
+  }
+  .cta-box p {
+    color: var(--ruled-mid);
+    margin-bottom: 32px;
+    font-size: 1rem;
+  }
+
+  /* ===== フッター ===== */
+  footer {
+    background: var(--ink);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 28px 24px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* ===== AdSense プレースホルダー ===== */
+  .ad-slot {
+    background: rgba(0,0,0,0.03);
+    border: 1px dashed var(--ruled-mid);
+    border-radius: 2px;
+    text-align: center;
+    padding: 16px;
+    font-size: 0.75rem;
+    color: #aaa;
+    margin: 32px 0;
+  }
+
+  @media (max-width: 480px) {
+    section { padding: 48px 16px; }
+    .header-inner { padding: 40px 16px 36px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<header>
+  <div class="header-lines"></div>
+  <div class="header-inner">
+    <p class="header-eyebrow">Web App · 手書きメモ · PWA</p>
+    <h1>指で書いて、<br><em>そのまま</em>メモにする。</h1>
+    <p class="header-desc">
+      走り書きメモは、タッチ画面に指でひと文字ずつ書いて、手書き文字のまま並べてメモを作るウェブアプリです。インストール不要で、オフラインでも使えます。
+    </p>
+    <a class="header-cta" href="index.html">アプリを開く</a>
+  </div>
+</header>
+
+<!-- ナビ -->
+<nav>
+  <div class="nav-inner">
+    <a href="#overview">概要</a>
+    <a href="#features">機能</a>
+    <a href="#howto">使い方</a>
+    <a href="#environments">対応環境</a>
+    <a href="#faq">よくある質問</a>
+  </div>
+</nav>
+
+<!-- 概要 -->
+<section id="overview">
+  <div class="section-inner">
+    <p class="section-label">Overview</p>
+    <div class="overview-grid">
+      <div>
+        <!-- モックアップ -->
+        <div class="mockup">
+          <div class="mockup-toolbar">
+            <span class="mockup-dot r"></span>
+            <span class="mockup-dot y"></span>
+            <span class="mockup-dot g"></span>
+            <span class="mockup-title">走り書きメモ</span>
+          </div>
+          <div class="mockup-ruled">
+            <div class="mockup-line">
+              <div class="char-block"></div>
+              <div class="char-block sm"></div>
+              <div class="char-block"></div>
+              <div class="char-block sm"></div>
+              <div class="char-block"></div>
+              <div class="char-block sp"></div>
+              <div class="char-block"></div>
+              <div class="char-block sm"></div>
+            </div>
+            <div class="mockup-line">
+              <div class="char-block"></div>
+              <div class="char-block"></div>
+              <div class="char-block sm"></div>
+              <div class="char-block sp"></div>
+              <div class="char-block"></div>
+              <div class="char-block"></div>
+              <div class="cursor-bar"></div>
+            </div>
+            <div class="mockup-line"></div>
+            <div class="mockup-line"></div>
+          </div>
+        </div>
+      </div>
+      <div class="overview-text">
+        <h3>手書き文字をそのまま「活字」のように並べる</h3>
+        <p>
+          画面の左右2つのキャンバスに交互に文字を書くと、書き上がった文字が罫線エリアに順番に並んでいきます。タイピングではなく、自分の手書き文字でメモを作る、まったく新しい入力体験です。
+        </p>
+        <p>
+          アプリはブラウザ上で動作し、インストールは不要。ホーム画面に追加することで、ネイティブアプリのようにオフラインでも起動できます。書いた内容は自動的に端末に保存されるので、途中で画面を閉じても続きから再開できます。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 広告スロット -->
+<div class="section-inner" style="max-width:900px;margin:0 auto;padding:0 24px;">
+  <div class="ad-slot">広告</div>
+</div>
+
+<!-- 機能 -->
+<section id="features">
+  <div class="section-inner">
+    <p class="section-label">Features</p>
+    <h2>主な機能</h2>
+    <p class="section-lead">手書き入力を中心に、快適なメモ作成のための機能を備えています。</p>
+
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <div class="feature-icon">✍️</div>
+        <h3>2キャンバス交互入力</h3>
+        <p>左右2枚のキャンバスに交互に文字を書くと自動で確定されます。書き終わった文字はすぐ次の入力に移れるため、テンポよく書き続けられます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">⏱️</div>
+        <h3>自動確定タイマー</h3>
+        <p>一定時間（デフォルト1秒）書く動作が止まると文字が自動確定されます。設定で秒数を変更でき、自分のペースに合わせて調整できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">💾</div>
+        <h3>自動ローカル保存</h3>
+        <p>文字を確定するたびに内容が端末のローカルストレージへ自動保存されます。アプリを閉じても次回起動時に続きから再開できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">↶</div>
+        <h3>元に戻す／やり直し</h3>
+        <p>最大100ステップの操作履歴を保持。誤って文字を削除してしまっても、ツールバーの「↶」ボタンですぐ取り消せます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3>選択・コピー・切り取り・貼り付け</h3>
+        <p>文字をタップして選択し、アプリ内でコピー・切り取り・貼り付けができます。選択範囲のドラッグや全選択にも対応しています。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>ピンチズームで拡大確認</h3>
+        <p>罫線エリアをピンチ操作で拡大・縮小できます。細かい字や長文になっても、ズームして見やすい倍率で確認できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📤</div>
+        <h3>画像として書き出し・共有</h3>
+        <p>書いたメモを画像として保存したり、Google Keepなどのアプリへ直接共有できます。手書きのまま記録を残せます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">⛶</div>
+        <h3>フルスクリーンモード</h3>
+        <p>ブラウザのUIを隠してフルスクリーンで使用できます。より広い画面で入力エリアを最大限に活用できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📵</div>
+        <h3>オフライン対応（PWA）</h3>
+        <p>Service Workerによってオフラインでも動作します。ホーム画面に追加するとネイティブアプリと同様に起動できます。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 使い方 -->
+<section id="howto">
+  <div class="section-inner">
+    <p class="section-label">How to use</p>
+    <h2>使い方</h2>
+    <p class="section-lead">シンプルな操作でどなたでもすぐに使い始められます。</p>
+
+    <div class="steps">
+      <div class="step">
+        <h3>ブラウザで開く</h3>
+        <p>スマートフォンやタブレットのブラウザでアプリのURLにアクセスします。インストールは不要です。</p>
+      </div>
+      <div class="step">
+        <h3>左のキャンバスに書く</h3>
+        <p>画面下部の左側キャンバスに指で1文字書きます。なぞった筆跡がそのまま表示されます。</p>
+      </div>
+      <div class="step">
+        <h3>右に書くと自動確定</h3>
+        <p>続けて右側キャンバスに次の文字を書くと、左の文字が確定されて罫線エリアに追加されます。</p>
+      </div>
+      <div class="step">
+        <h3>繰り返して文章を作る</h3>
+        <p>左→右→左→右と交互に書き続けることで、手書き文字が横に並んで文章になっていきます。</p>
+      </div>
+      <div class="step">
+        <h3>ホーム画面に追加（任意）</h3>
+        <p>ブラウザの「ホーム画面に追加」からPWAとしてインストールできます。</p>
+      </div>
+      <div class="step">
+        <h3>画像として保存・共有</h3>
+        <p>ツールバーの💾ボタンでメモを画像保存、📤ボタンで他のアプリへ共有できます。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 広告スロット -->
+<div class="section-inner" style="max-width:900px;margin:0 auto;padding:0 24px;">
+  <div class="ad-slot">広告</div>
+</div>
+
+<!-- 対応環境 -->
+<section id="environments">
+  <div class="section-inner">
+    <p class="section-label">Environments</p>
+    <h2>対応環境</h2>
+    <p class="section-lead">モダンブラウザであれば端末を問わず動作します。</p>
+
+    <div class="env-grid">
+      <div class="env-card">
+        <div class="env-icon">📱</div>
+        <h3>Android</h3>
+        <p>Chrome / Firefox など主要ブラウザで動作。PWAホーム画面追加に対応。</p>
+      </div>
+      <div class="env-card">
+        <div class="env-icon">🍎</div>
+        <h3>iPhone / iPad</h3>
+        <p>Safari で動作。ホーム画面に追加でスタンドアロン起動が可能です。</p>
+      </div>
+      <div class="env-card">
+        <div class="env-icon">💻</div>
+        <h3>PC（タッチ対応）</h3>
+        <p>タッチスクリーン搭載のWindowsやMacでも指・ペンで入力できます。</p>
+      </div>
+      <div class="env-card">
+        <div class="env-icon">🖥️</div>
+        <h3>PC（マウス）</h3>
+        <p>マウスでも描画可能。キーボードのBackspace・Enter・矢印キーにも対応。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="section-inner">
+    <p class="section-label">FAQ</p>
+    <h2>よくある質問</h2>
+
+    <div class="faq-list">
+      <details>
+        <summary>無料で使えますか？</summary>
+        <p class="faq-ans">はい、完全無料でご利用いただけます。アカウント登録や課金は一切不要です。</p>
+      </details>
+      <details>
+        <summary>書いたメモはどこに保存されますか？</summary>
+        <p class="faq-ans">メモの内容はお使いの端末のブラウザのローカルストレージに保存されます。外部サーバーへの送信は行わないため、プライバシーが守られます。</p>
+      </details>
+      <details>
+        <summary>他の端末とメモを同期できますか？</summary>
+        <p class="faq-ans">現在のところ、端末間の自動同期機能はありません。画像として書き出してからGoogle KeepやLINEなどで送ることで他の端末と共有できます。</p>
+      </details>
+      <details>
+        <summary>書いたメモをテキストとして使えますか？</summary>
+        <p class="faq-ans">走り書きメモの文字は手書きの画像として保存される仕組みです。テキストデータへの変換（OCR）はGoogleKeepに共有し、「画像のテキストを抽出」機能を利用すれば可能です。</p>
+      </details>
+      <details>
+        <summary>手書き文字のサイズは変えられますか？</summary>
+        <p class="faq-ans">⚙️設定メニューから文字サイズを調整できます。また、罫線エリアはピンチ操作で拡大・縮小して確認することも可能です。</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="section-inner">
+    <div class="cta-box">
+      <h2>さっそく試してみる</h2>
+      <p>インストール不要。ブラウザですぐに使い始められます。</p>
+      <a class="header-cta" href="index.html">走り書きメモを開く</a>
+    </div>
+  </div>
+</section>
+
+<!-- フッター -->
+<footer>
+  <p>走り書きメモ &mdash; 手書き文字でメモを作るウェブアプリ</p>
+</footer>
+
+</body>
+</html>
