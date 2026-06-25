@@ -408,6 +408,8 @@
             overflow: hidden;
             background: #ffffff;
             z-index: 9999;
+            display: flex;
+            flex-direction: column;
         }
 
         body.fullscreen .display-area {
@@ -417,7 +419,7 @@
         }
 
         body.fullscreen .input-area {
-            display: none;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -432,6 +434,7 @@
 <button class="toolbar-btn" id="btnCut">✂️</button>
 <button class="toolbar-btn" id="btnPaste">📥</button>
 <button class="toolbar-btn" id="btnSettings">⚙️</button>
+<button class="toolbar-btn" id="btnHelp" title="ヘルプ">❓</button>
 <button class="toolbar-btn" id="btnFullscreen">⛶</button>
     </div>
 
@@ -1686,6 +1689,10 @@ document.getElementById('btnRedo').addEventListener('click', redo);
         const settingTomehane = document.getElementById('settingTomehane');
         const settingBrushWidth = document.getElementById('settingBrushWidth');
         const autoTimeDisplay = document.getElementById('autoTimeDisplay');
+
+        document.getElementById('btnHelp').addEventListener('click', function() {
+            window.open('about.html', '_blank');
+        });
 
         document.getElementById('btnSettings').addEventListener('click', function() {
             settingsOverlay.classList.add('show');
