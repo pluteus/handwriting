@@ -308,6 +308,7 @@
   .env-card h3 { font-size: 0.95rem; color: #fff; margin-bottom: 6px; }
   .env-card p { font-size: 0.85rem; color: var(--ruled-mid); line-height: 1.7; }
 
+
   /* ===== FAQ ===== */
   #faq {
     background: var(--paper-mid);
@@ -634,6 +635,82 @@
         <p class="faq-ans">⚙️設定メニューから文字サイズを調整できます。また、罫線エリアはピンチ操作で拡大・縮小して確認することも可能です。</p>
       </details>
     </div>
+  </div>
+</section>
+
+<!-- 開発背景 -->
+<section id="background">
+  <div class="section-inner">
+    <p class="section-label">Background</p>
+    <h2>なぜ「走り書きメモ」を作ったのか</h2>
+    <p class="section-lead">
+      このアプリは「もっと気軽に、もっと素早く、手書きでメモを残したい」という思いから生まれました。
+      多くのメモアプリは多機能で便利な一方、起動が重かったり、アカウント登録が必要だったりと、
+      ちょっとしたメモを残すにはハードルが高い場面があります。
+      そこで、ブラウザだけで動作し、ページを開いた瞬間に書き始められる軽量な手書きメモツールを目指しました。
+    </p>
+  </div>
+</section>
+
+<!-- 技術的な仕組み -->
+<section id="tech">
+  <div class="section-inner">
+    <p class="section-label">Technology</p>
+    <h2>ブラウザだけで動く仕組み</h2>
+    <p class="section-lead">
+      描画には HTML5 Canvas と Pointer Events API を使用しています。
+      ペン・指・マウスの入力を統一的に扱えるため、デバイスを選ばず自然な書き心地を実現できます。
+      また、描いた内容はブラウザの LocalStorage に保存され、サーバーに送信されることはありません。
+      そのため、オフライン環境でも利用でき、プライバシー面でも安心して使えます。
+    </p>
+    <p>
+      パフォーマンス面では、ストロークの補間やバッファリングを行い、低スペック端末でも滑らかに動作するよう最適化しています。
+      これらの処理はすべてクライアント側で完結しており、インストール不要で軽快に動作するのが特徴です。
+    </p>
+  </div>
+</section>
+
+<!-- UI/UX のこだわり -->
+<section id="ux">
+  <div class="section-inner">
+    <p class="section-label">Design</p>
+    <h2>書くことに集中できる UI</h2>
+    <p class="section-lead">
+      走り書きメモは「余計なものを置かない」ことを大切にしています。
+      Undo/Redo も直感的に操作できます。
+      UI を最小限に抑えることで、紙に書くような感覚でメモに集中できる体験を目指しました。
+    </p>
+  </div>
+</section>
+
+<!-- 今後のアップデート -->
+<section id="roadmap">
+  <div class="section-inner">
+    <p class="section-label">Roadmap</p>
+    <h2>今後のアップデート予定</h2>
+    <ul class="section-lead">
+      <li>安定性・高速性の向上</li>
+    </ul>
+    <p>
+      ユーザーのフィードバックをもとに、より使いやすいツールへ継続的に改善していきます。
+    </p>
+  </div>
+</section>
+
+<!-- 作者プロフィール -->
+<section id="author">
+  <div class="section-inner">
+    <p class="section-label">Author</p>
+    <h2>作者について</h2>
+    <p class="section-lead">
+      Web 技術を中心に個人開発を行っています。
+      「ブラウザだけでどこまで快適な体験を作れるか」をテーマに、UI/UX の研究や小さなツールの開発を続けています。
+      このアプリもその実験の一つとして制作しました。
+    </p>
+    <p>
+      不具合報告や改善要望は GitHub Issues から受け付けています。  
+      <a href="https://github.com/pluteus/handwriting/issues" target="_blank">→ Issues を開く</a>
+    </p>
   </div>
 </section>
 
