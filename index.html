@@ -225,14 +225,12 @@
         /* === 表示エリア === */
         .display-area {
             background: #ffffff;
-            border-bottom: 4px solid #cccccc;
             padding: 20px;
             overflow: auto;
             position: relative;
             padding-bottom: 60px;
             -webkit-overflow-scrolling: touch;
             touch-action: none;
-            cursor: ns-resize;
         }
 
         .zoom-container {
@@ -400,6 +398,63 @@
             pointer-events: none;
         }
 
+        /* === 境界スライダー === */
+        .divider-slider {
+            width: 100%;
+            height: 28px;
+            background: #e8e8e8;
+            border-top: 1px solid #cccccc;
+            border-bottom: 1px solid #cccccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            position: relative;
+            cursor: ns-resize;
+            touch-action: none;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .divider-slider::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 4px;
+            background: #aaaaaa;
+            border-radius: 2px;
+            box-shadow: 0 -5px 0 #aaaaaa, 0 5px 0 #aaaaaa;
+        }
+
+        /* 左右ドラッグ中のビジュアルフィードバック */
+        .divider-slider.lr-active {
+            background: #ddeeff;
+        }
+        .divider-slider.ud-active {
+            background: #ffeedd;
+        }
+
+        /* スライダー上のズームインジケーター */
+        .divider-zoom-label {
+            position: absolute;
+            right: 12px;
+            font-size: 10px;
+            color: #888;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            opacity: 0;
+        }
+        .divider-slider.lr-active .divider-zoom-label {
+            opacity: 1;
+        }
+
+        body.fullscreen .divider-slider {
+            /* フルスクリーン時も表示 */
+        }
+
         body.fullscreen {
             position: fixed;
             inset: 0;
@@ -487,6 +542,10 @@
                 <span class="cursor" id="cursor"></span>
             </div>
         </div>
+    </div>
+
+    <div class="divider-slider" id="dividerSlider">
+        <span class="divider-zoom-label" id="dividerZoomLabel">×1.0</span>
     </div>
 
     <div class="input-area">
@@ -1780,134 +1839,76 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
 
 
-        // === 境界線のドラッグ調整 ＆ 入力エリアの動的サイズ計算（長方形化対応） ===
+        // === スライダーによる境界調整・入力エリアサイズ計算・ズーム操作 ===
         (function() {
             const displayArea = document.getElementById('displayArea');
-            const inputArea = document.querySelector('.input-area');
-            const toolbar = document.getElementById('toolbar');
+            const inputArea   = document.querySelector('.input-area');
+            const toolbar     = document.getElementById('toolbar');
+            const slider      = document.getElementById('dividerSlider');
+            const zoomLabel   = document.getElementById('dividerZoomLabel');
 
-            // デフォルト境界線Y:
-            //   画面最下部Y - (アプリ画面幅 - 改行ボタン幅) / 2
-            // → displayHeight = borderY - toolbarHeight
+            // ---- ズーム状態（罫線エリアのscale）----
+            // zoomContainerへの参照はこのIIFE内では取得できないため
+            // 後段IIFEと共有するためwindow変数を使う
+            window._displayScale = 1.0;
+            const MIN_SCALE = 0.3;
+            const MAX_SCALE = 4.0;
+
+            function applyDisplayScale(scale) {
+                window._displayScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+                const zc = document.getElementById('zoomContainer');
+                if (zc) zc.style.transform = 'scale(' + window._displayScale.toFixed(2) + ')';
+                zoomLabel.textContent = '×' + window._displayScale.toFixed(1);
+            }
+
+            // ---- 高さ計算 ----
+            const MIN_INPUT_AREA_H = 40 + (10 * 2);
+            const PADDING = 10 * 2;
+
             function calcDefaultDisplayHeight() {
                 const appH = window.innerHeight;
                 const appW = window.innerWidth;
                 const toolbarH = toolbar ? toolbar.offsetHeight : 0;
-                // --btn-size が設定される前の初期値は CSS デフォルト 48px
-                const btnSize = parseFloat(
+                const sliderH  = slider  ? slider.offsetHeight  : 28;
+                const btnSize  = parseFloat(
                     getComputedStyle(document.documentElement).getPropertyValue('--btn-size')
                 ) || 48;
-                // .buttons 列の実幅: ボタン幅 + input-area の左右 padding (10px×2)
-                const buttonsW = btnSize + 20;
-                // 手書きエリアの正方形一辺 = (画面幅 - ボタン幅) / 2
+                const buttonsW      = btnSize + 20;
                 const inputSquareSide = (appW - buttonsW) / 2;
-                // 境界線の画面Y座標 = 画面高さ - 正方形一辺
-                const borderY = appH - inputSquareSide;
+                const borderY       = appH - inputSquareSide - sliderH;
                 return Math.max(100, borderY - toolbarH);
             }
 
-            let userMoved = false; // ユーザーがドラッグで動かしたか
+            let userMoved     = false;
             let displayHeight = calcDefaultDisplayHeight();
-            displayArea.style.flex = 'none';
+            displayArea.style.flex   = 'none';
             displayArea.style.height = displayHeight + 'px';
 
-            let isDragging = false;
-            let startY = 0;
-            let startHeight = 0;
-
-            // displayAreaの他のtouchハンドラからも参照できるよう外部変数に公開
+            // 他のtouchハンドラから参照できるよう公開
             window._dividerDragging = false;
 
-            // input-area が必要とする最小高さ（ボタン4個が最小サイズ(40px)で収まる高さ＋パディング）
-            // これは displayHeight に依存しない固定値として扱う。
-            // doResize 内で inputArea.offsetHeight をそのまま使うと、
-            // input-area が flex:1 で「残りスペース」を取る構造のため
-            // displayHeight → inputH → maxH → displayHeight という循環参照になり、
-            // クリック1回でも境界線が暴走して動かなくなる不具合の原因になっていた。
-            const MIN_INPUT_AREA_H = 40 + (10 * 2); // 最小ボタンサイズ + 上下padding
-
-            function startResize(e) {
-                const rect = displayArea.getBoundingClientRect();
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                // フルスクリーン時など rect.bottom が window.innerHeight を超えることがあるため
-                // 実際に画面内に収まる値にクランプして判定する
-                const effectiveBottom = Math.min(rect.bottom, window.innerHeight);
-                
-                if (effectiveBottom - clientY <= 15 && clientY >= rect.top) {
-                    isDragging = true;
-                    window._dividerDragging = true;
-                    startY = clientY;
-                    startHeight = displayArea.offsetHeight;
-                    e.preventDefault();
-                }
-            }
-
-            function doResize(e) {
-                if (!isDragging) return;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                const deltaY = clientY - startY;
-                
-                let newHeight = startHeight + deltaY;
-                const minH = 100;
-                // toolbar はフルスクリーン中は非表示(高さ0)なので毎回実測する。
-                // input-area 側は displayHeight に依存しない固定の最小高さを使うことで
-                // 循環参照（displayHeight → inputH → maxH）を断ち切る。
-                const toolbarH = toolbar ? toolbar.offsetHeight : 0;
-                const maxH = window.innerHeight - toolbarH - MIN_INPUT_AREA_H;
-                newHeight = Math.max(minH, Math.min(maxH, newHeight));
-                
-                userMoved = true;
-                displayHeight = newHeight;
-                displayArea.style.height = displayHeight + 'px';
-                checkLayout(); 
-            }
-
-            function endResize() {
-                isDragging = false;
-                window._dividerDragging = false;
-            }
-
-            displayArea.addEventListener('mousedown', startResize);
-            window.addEventListener('mousemove', doResize);
-            window.addEventListener('mouseup', endResize);
-
-            displayArea.addEventListener('touchstart', startResize, { passive: false });
-            window.addEventListener('touchmove', function(e) {
-                if (isDragging) {
-                    e.preventDefault(); 
-                    doResize(e);
-                }
-            }, { passive: false });
-            window.addEventListener('touchend', endResize);
-            window.addEventListener('touchcancel', endResize);
-
-
-            const PADDING = 10 * 2;
-            const GAP = 8;
-
             function checkLayout() {
-                displayArea.style.flex = 'none';
+                displayArea.style.flex   = 'none';
                 displayArea.style.height = displayHeight + 'px';
 
                 const totalH = inputArea.clientHeight;
                 const finalH = Math.max(40, totalH - PADDING);
-
                 inputArea.style.setProperty('--cv-h', finalH + 'px');
 
-                // canvasの描画解像度をwrapperの実サイズに合わせる
                 requestAnimationFrame(() => {
                     ['wrapper1', 'wrapper2'].forEach(id => {
                         const wr = document.getElementById(id);
+                        if (!wr) return;
                         const cv = wr.querySelector('canvas');
-                        const w = wr.clientWidth;
-                        const h = wr.clientHeight;
+                        const w  = wr.clientWidth;
+                        const h  = wr.clientHeight;
                         if (w > 0 && h > 0) {
-                            cv.width = w;
+                            cv.width  = w;
                             cv.height = h;
                             const ctx = cv.getContext('2d');
-                            ctx.lineCap = 'round';
-                            ctx.lineJoin = 'round';
-                            ctx.lineWidth = 6;
+                            ctx.lineCap    = 'round';
+                            ctx.lineJoin   = 'round';
+                            ctx.lineWidth  = 6;
                             ctx.strokeStyle = '#000000';
                         }
                     });
@@ -1917,11 +1918,100 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 inputArea.style.setProperty('--btn-size', btnSize + 'px');
             }
 
+            // ---- スライダー操作 ----
+            // 上下スワイプ → 手書きエリア高さ変更（displayAreaの高さを逆方向に変化）
+            // 左右スワイプ → 罫線エリアのズーム
+            let sliderDragging = false;
+            let sliderStartX   = 0;
+            let sliderStartY   = 0;
+            let sliderStartH   = 0;
+            let sliderStartScale = 1.0;
+            let sliderDir      = null; // 'ud' | 'lr' | null
+
+            const DIR_THRESHOLD = 6; // px: 方向決定の閾値
+
+            function sliderPointerStart(e) {
+                if (e.touches && e.touches.length !== 1) return;
+                sliderDragging   = true;
+                window._dividerDragging = true;
+                sliderDir        = null;
+                const pt         = e.touches ? e.touches[0] : e;
+                sliderStartX     = pt.clientX;
+                sliderStartY     = pt.clientY;
+                sliderStartH     = displayHeight;
+                sliderStartScale = window._displayScale;
+                slider.classList.remove('ud-active', 'lr-active');
+                e.preventDefault();
+            }
+
+            function sliderPointerMove(e) {
+                if (!sliderDragging) return;
+                const pt  = e.touches ? e.touches[0] : e;
+                const dx  = pt.clientX - sliderStartX;
+                const dy  = pt.clientY - sliderStartY;
+
+                // 方向をまだ決めていない場合
+                if (!sliderDir) {
+                    if (Math.abs(dx) < DIR_THRESHOLD && Math.abs(dy) < DIR_THRESHOLD) {
+                        e.preventDefault(); return;
+                    }
+                    sliderDir = Math.abs(dy) >= Math.abs(dx) ? 'ud' : 'lr';
+                    slider.classList.toggle('ud-active', sliderDir === 'ud');
+                    slider.classList.toggle('lr-active', sliderDir === 'lr');
+                }
+
+                if (sliderDir === 'ud') {
+                    // 上スワイプ → 手書きエリア拡大（displayArea縮小）
+                    const toolbarH = toolbar ? toolbar.offsetHeight : 0;
+                    const sliderH  = slider  ? slider.offsetHeight  : 28;
+                    const maxH = window.innerHeight - toolbarH - sliderH - MIN_INPUT_AREA_H;
+                    // dy > 0 (下スワイプ) → displayArea大きく → 手書きエリア小さく
+                    // dy < 0 (上スワイプ) → displayArea小さく → 手書きエリア大きく
+                    let newH = sliderStartH + dy;
+                    newH = Math.max(60, Math.min(maxH, newH));
+                    userMoved     = true;
+                    displayHeight = newH;
+                    checkLayout();
+                } else {
+                    // 左右スワイプ → 罫線エリアズーム
+                    // 右スワイプ → 拡大、左スワイプ → 縮小
+                    const sensitivity = 0.005; // px あたりのscale変化量
+                    const newScale = sliderStartScale + dx * sensitivity;
+                    applyDisplayScale(newScale);
+                }
+
+                e.preventDefault();
+            }
+
+            function sliderPointerEnd(e) {
+                if (!sliderDragging) return;
+                sliderDragging = false;
+                window._dividerDragging = false;
+                slider.classList.remove('ud-active', 'lr-active');
+                sliderDir = null;
+            }
+
+            // タッチ
+            slider.addEventListener('touchstart',  sliderPointerStart, { passive: false });
+            slider.addEventListener('touchmove',   sliderPointerMove,  { passive: false });
+            slider.addEventListener('touchend',    sliderPointerEnd,   { passive: false });
+            slider.addEventListener('touchcancel', sliderPointerEnd,   { passive: false });
+
+            // マウス（PC）
+            slider.addEventListener('mousedown', sliderPointerStart);
+            window.addEventListener('mousemove', function(e) {
+                if (sliderDragging) sliderPointerMove(e);
+            });
+            window.addEventListener('mouseup', function(e) {
+                if (sliderDragging) sliderPointerEnd(e);
+            });
+
+            // ---- resize / orientationchange ----
             checkLayout();
             const ro = new ResizeObserver(checkLayout);
             ro.observe(inputArea);
+
             window.addEventListener('resize', function() {
-                // 画面回転・リサイズ時: ユーザーが手動移動していなければデフォルトに戻す
                 if (!userMoved) {
                     displayHeight = calcDefaultDisplayHeight();
                     displayArea.style.height = displayHeight + 'px';
@@ -1929,7 +2019,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 checkLayout();
             });
             window.addEventListener('orientationchange', function() {
-                userMoved = false; // 回転時は常にデフォルトへリセット
+                userMoved = false;
                 setTimeout(function() {
                     displayHeight = calcDefaultDisplayHeight();
                     displayArea.style.height = displayHeight + 'px';
@@ -1937,21 +2027,19 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 }, 100);
             });
 
-            // フルスクリーン時の初期高さを再計算する共通関数
-            // requestFullscreen() の完了直後はブラウザによって window.innerHeight が
-            // まだ更新されていないことがあるため、2フレーム分待って計算する
+            // ---- フルスクリーン ----
             function recalcFullscreenHeight() {
                 requestAnimationFrame(function() {
                     requestAnimationFrame(function() {
-                        const inputH = document.querySelector('.input-area').offsetHeight;
-                        displayHeight = window.innerHeight - inputH;
-                        userMoved = false;
+                        const sliderH = slider ? slider.offsetHeight : 28;
+                        const inputH  = document.querySelector('.input-area').offsetHeight;
+                        displayHeight = window.innerHeight - inputH - sliderH;
+                        userMoved     = false;
                         checkLayout();
                     });
                 });
             }
 
-            // フルスクリーン ボタンハンドラ（IIFEスコープ内で displayHeight/userMoved/checkLayout に正しくアクセス）
             document.getElementById('btnFullscreen').addEventListener('click', async function() {
                 document.body.classList.add('fullscreen');
                 try {
@@ -1959,8 +2047,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                         await document.documentElement.requestFullscreen();
                     }
                 } catch (e) { console.log(e); }
-                // requestFullscreen完了後（resolve後）に高さを再計算することで
-                // window.innerHeight が確実にフルスクリーン後の値になっている状態で計算する
                 recalcFullscreenHeight();
             });
 
@@ -1978,7 +2064,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
             document.addEventListener('fullscreenchange', function() {
                 if (document.fullscreenElement) {
-                    // フルスクリーンに入った（ブラウザのF11等、ボタン以外の経路も含む）
                     document.body.classList.add('fullscreen');
                     recalcFullscreenHeight();
                 } else {
@@ -2119,7 +2204,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             // === マウスの左ドラッグ範囲選択イベント ===
             displayArea.addEventListener('mousedown', function(e) {
                 if (e.button !== 0) return;
-                if (displayArea.offsetHeight - (e.clientY - displayArea.getBoundingClientRect().top) <= 15) return;
 
                 const startEl = charAtPoint(e.clientX, e.clientY);
                 if (startEl) {
@@ -2230,11 +2314,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             // === タッチイベント制御（既存処理の維持） ===
             displayArea.addEventListener('touchstart', function(e) {
                 if (window._dividerDragging) return;
-                const _daRect = displayArea.getBoundingClientRect();
-                const _effectiveBottom = Math.min(_daRect.bottom, window.innerHeight);
-                if (_effectiveBottom - e.touches[0].clientY <= 15 && e.touches[0].clientY >= _daRect.top) {
-                    return;
-                }
 
                 if (e.touches.length === 1) {
                     const t = e.touches[0];
@@ -2263,7 +2342,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     mode = 'pinching';
                     const dist = getTouchDist(e.touches);
                     pinchStartDist  = dist;
-                    pinchStartScale = currentScale;
+                    pinchStartScale = window._displayScale || currentScale;
                     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                     scrollStartX = mx;
@@ -2316,7 +2395,11 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     let newScale = pinchStartScale * pinchRatio;
                     newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
                     currentScale = newScale;
+                    window._displayScale = currentScale;
                     zoomContainer.style.transform = 'scale(' + currentScale + ')';
+                    // スライダーのズームラベルを更新
+                    const zl = document.getElementById('dividerZoomLabel');
+                    if (zl) zl.textContent = '×' + currentScale.toFixed(1);
 
                     displayArea.scrollLeft = scrollOriginLeft - scrollDX;
                     displayArea.scrollTop  = scrollOriginTop  - scrollDY;
