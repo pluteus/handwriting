@@ -7,8 +7,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="走り書きメモ">
-    <title>走り書きメモ</title>
+    <meta name="apple-mobile-web-app-title" content="マスガキ">
+    <title>マスガキ</title>
     <style>
         * {
             margin: 0;
@@ -650,7 +650,7 @@ function scrollCursorIntoView() {
 // ============================================================
 // ローカル保存 / 復元
 // ============================================================
-const LS_KEY = 'hashirigaki-memo-content';
+const LS_KEY = 'masugaki-content';
 
 function saveToLocalStorage() {
     try {
@@ -1711,7 +1711,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     navigator.share({
                         files: [file],
-                        title: '走り書きメモ',
+                        title: 'マスガキ',
                         text: '手書きメモを共有します'
                     }).catch(function(err) {
                         console.log('Share cancelled', err);
@@ -2819,9 +2819,9 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
             // --- アイコン: 同フォルダの icon.svg を直接参照 ---
             const manifest = {
-                name: '走り書きメモ',
-                short_name: '走り書き',
-                description: '手書き文字を並べて文章を作るメモアプリ',
+                name: 'マスガキ',
+                short_name: 'masugaki',
+                description: '手書き文字を並べて文章を作るアプリ',
                 start_url: './',
                 display: 'standalone',
                 background_color: '#ffffff',
