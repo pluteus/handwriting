@@ -2091,6 +2091,10 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             let touchStartX = 0, touchStartY = 0;
             let longPressTimer = null;
 
+            // === 左端余白（行選択）用の状態 ===
+            let marginStartLineIndex = -1;
+            let marginEndLineIndex   = -1;
+
             // マウス用の長押し・移動判定変数
             let mouseLongPressTimer = null;
             let mouseStartX = 0, mouseStartY = 0;
@@ -2115,6 +2119,36 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
                 }
                 return null;
+            }
+
+            // Y座標から対象行のインデックスを求める（範囲外の場合は最も近い行）
+            function lineIndexAtY(y) {
+                const lines = Array.from(zoomContainer.querySelectorAll('.line'));
+                for (let i = 0; i < lines.length; i++) {
+                    const r = lines[i].getBoundingClientRect();
+                    if (y >= r.top && y <= r.bottom) return i;
+                }
+                let nearestIdx = -1, nearestDist = Infinity;
+                lines.forEach((line, i) => {
+                    const r = line.getBoundingClientRect();
+                    const cy = (r.top + r.bottom) / 2;
+                    const d = Math.abs(cy - y);
+                    if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
+                });
+                return nearestIdx;
+            }
+
+            // 指定した行インデックス範囲（複数可）の文字を選択状態にする
+            function selectLines(startIdx, endIdx) {
+                document.querySelectorAll('.char-item.selected, .space-char.selected')
+                    .forEach(el => el.classList.remove('selected'));
+                if (startIdx < 0 || endIdx < 0) return;
+                const lines = Array.from(zoomContainer.querySelectorAll('.line'));
+                const lo = Math.min(startIdx, endIdx), hi = Math.max(startIdx, endIdx);
+                for (let i = lo; i <= hi && i < lines.length; i++) {
+                    lines[i].querySelectorAll('.char-item, .space-char').forEach(el => el.classList.add('selected'));
+                }
+                cursor.classList.add('hidden');
             }
 
             function updateSelection(startEl, endEl) {
@@ -2317,6 +2351,22 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
                 if (e.touches.length === 1) {
                     const t = e.touches[0];
+
+                    // === 左端余白タップ／スワイプによる行選択 ===
+                    const daRectM = displayArea.getBoundingClientRect();
+                    const zcRectM = zoomContainer.getBoundingClientRect();
+                    if (t.clientX >= daRectM.left && t.clientX < zcRectM.left) {
+                        cancelLongPress();
+                        mode = 'margin_selecting';
+                        marginStartLineIndex = lineIndexAtY(t.clientY);
+                        marginEndLineIndex = marginStartLineIndex;
+                        if (marginStartLineIndex >= 0) {
+                            selectLines(marginStartLineIndex, marginStartLineIndex);
+                        }
+                        e.preventDefault();
+                        return;
+                    }
+
                     touchStartX = t.clientX;
                     touchStartY = t.clientY;
                     
@@ -2356,6 +2406,20 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
             displayArea.addEventListener('touchmove', function(e) {
                 if (window._dividerDragging) return;
+
+                if (mode === 'margin_selecting') {
+                    if (e.touches.length === 1) {
+                        e.preventDefault();
+                        const t = e.touches[0];
+                        const newIdx = lineIndexAtY(t.clientY);
+                        if (newIdx >= 0 && newIdx !== marginEndLineIndex) {
+                            marginEndLineIndex = newIdx;
+                            selectLines(marginStartLineIndex, marginEndLineIndex);
+                        }
+                    }
+                    return;
+                }
+
                 if (mode === 'idle' || mode === 'mouse_selecting') return;
                 e.preventDefault();
 
@@ -2408,6 +2472,14 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
             displayArea.addEventListener('touchend', function(e) {
                 if (window._dividerDragging) return;
+
+                if (mode === 'margin_selecting') {
+                    if (e.touches.length === 0) {
+                        mode = 'idle';
+                    }
+                    return;
+                }
+
                 if (e.touches.length === 0) {
                     if (mode === 'longpress_pending') {
                         cancelLongPress();
