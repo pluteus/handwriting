@@ -474,6 +474,97 @@
         body.fullscreen .input-area {
             flex-shrink: 0;
         }
+
+        /* === ダークテーマ === */
+        body.dark-theme {
+            background: #000000;
+            color: #eeeeee;
+        }
+
+        body.dark-theme.fullscreen {
+            background: #000000;
+        }
+
+        body.dark-theme .toolbar {
+            background: #1a1a1a;
+            border-bottom: 1px solid #333333;
+            color: #eeeeee;
+        }
+
+        body.dark-theme .toolbar-btn {
+            color: #eeeeee;
+        }
+
+        body.dark-theme .settings-panel {
+            background: #1a1a1a;
+            color: #eeeeee;
+        }
+
+        body.dark-theme .settings-input {
+            background: #333333;
+            border-color: #555555;
+            color: #eeeeee;
+        }
+
+        body.dark-theme .settings-unit {
+            color: #aaaaaa;
+        }
+
+        body.dark-theme .toggle-slider {
+            background-color: #555555;
+        }
+
+        body.dark-theme .settings-close {
+            background: #444444;
+        }
+
+        body.dark-theme .display-area {
+            background: #000000;
+        }
+
+        body.dark-theme .line {
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        body.dark-theme .input-area {
+            background: #111111;
+        }
+
+        /* 手書きキャンバス: 白背景+黒文字を反転させ、黒背景+白文字に見せる */
+        body.dark-theme .canvas-wrapper canvas {
+            filter: invert(1);
+            border-color: #555555;
+        }
+
+        body.dark-theme .canvas-label {
+            background: rgba(0,0,0,0.6);
+            color: #cccccc;
+        }
+
+        /* 確定済み文字（黒文字の透過PNG）も白反転させる */
+        body.dark-theme .char-item img {
+            filter: invert(1);
+        }
+
+        body.dark-theme .guide-text {
+            color: #777777;
+        }
+
+        body.dark-theme .btn {
+            background: #333333;
+            color: #eeeeee;
+        }
+
+        body.dark-theme .divider-slider {
+            background: #1a1a1a;
+            border-top: 1px solid #333333;
+            border-bottom: 1px solid #333333;
+        }
+
+        body.dark-theme .divider-slider::before {
+            background: #666666;
+            box-shadow: 0 -5px 0 #666666, 0 5px 0 #666666;
+        }
     </style>
 </head>
 <body>
@@ -486,6 +577,7 @@
 <button class="toolbar-btn" id="btnCopy">📋</button>
 <button class="toolbar-btn" id="btnCut">✂️</button>
 <button class="toolbar-btn" id="btnPaste">📥</button>
+<button class="toolbar-btn" id="btnTheme" title="テーマ切替">🌙</button>
 <button class="toolbar-btn" id="btnSettings">⚙️</button>
 <button class="toolbar-btn" id="btnHelp" title="ヘルプ">❓</button>
 <button class="toolbar-btn" id="btnFullscreen">⛶</button>
@@ -1737,6 +1829,41 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             a.download = 'handwriting_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.png';
             a.click();
         });
+
+        // テーマ切替
+        const THEME_LS_KEY = 'hashirigaki-theme';
+        const btnTheme = document.getElementById('btnTheme');
+
+        function applyTheme(theme) {
+            document.body.classList.toggle('dark-theme', theme === 'dark');
+            if (btnTheme) {
+                btnTheme.textContent = theme === 'dark' ? '☀️' : '🌙';
+            }
+            const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+            if (themeColorMeta) {
+                themeColorMeta.setAttribute('content', theme === 'dark' ? '#000000' : '#f0f0f0');
+            }
+        }
+
+        let currentTheme = 'light';
+        try {
+            currentTheme = localStorage.getItem(THEME_LS_KEY) || 'light';
+        } catch (e) {
+            console.warn('[テーマ] localStorage 読み込みに失敗:', e);
+        }
+        applyTheme(currentTheme);
+
+        if (btnTheme) {
+            btnTheme.addEventListener('click', function() {
+                currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                try {
+                    localStorage.setItem(THEME_LS_KEY, currentTheme);
+                } catch (e) {
+                    console.warn('[テーマ] localStorage 保存に失敗:', e);
+                }
+                applyTheme(currentTheme);
+            });
+        }
 
         // 設定
         const settingsOverlay = document.getElementById('settingsOverlay');
