@@ -3,25 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>マスガキ — 手書き文字でメモを作るウェブアプリ</title>
-<meta name="description" content="マスガキは、スマートフォンやタブレットの画面に指で文字を書き、そのまま並べてメモを作成できるウェブアプリです。インストール不要。">
+<title>マスガキ — 手書き・速記・筆談のためのメモアプリ</title>
+<meta name="description" content="マスガキは、スマートフォンやタブレットで指やペンを使って手書き文字をそのままメモにできる軽量ウェブアプリです。走り書き・速記・筆談にも便利。インストール不要・オフライン対応で、素早く書けるシンプルな手書きメモ体験を提供します。A lightweight browser-based handwriting app for quick notes, shorthand, and written communication.">
 
-<!-- 基本 SEO -->
-<meta name="description" content="マスガキは、スマートフォンやタブレットで指やペンを使って手書き文字をそのままメモにできる軽量ウェブアプリです。インストール不要・オフライン対応で、素早く書けるシンプルな手書きメモ体験を提供します。">
-
-<meta name="keywords" content="手書きメモ, メモアプリ, 手書きアプリ, ブラウザメモ, PWA, タッチ操作, スマホメモ, タブレットメモ, オフラインメモ, 手書き文字, Canvas メモ">
+<meta name="keywords" content="マスガキ, 走り書きアプリ, 手書きアプリ, 速記アプリ, 筆談アプリ, 手書きメモ, メモアプリ, ブラウザメモ, PWA, タッチ操作, スマホメモ, タブレットメモ, オフラインメモ, 手書き文字, 手書き入力, Canvas メモ, handwriting app, shorthand app, written communication app">
+<meta name="author" content="pluteus">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://pluteus.github.io/handwriting/about.html">
 
 <!-- SNS（OGP） -->
 <meta property="og:title" content="マスガキ — 指で書いて、そのままメモにするウェブアプリ">
-<meta property="og:description" content="スマホやタブレットで指やペンを使って手書き文字をそのままメモにできる軽量ウェブアプリ。インストール不要・オフライン対応。">
+<meta property="og:description" content="スマホやタブレットで指やペンを使って手書き文字をそのままメモにできる軽量ウェブアプリ。走り書き・速記・筆談にも便利。インストール不要・オフライン対応。">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://pluteus.github.io/handwriting/about.html">
 <meta property="og:image" content="https://pluteus.github.io/handwriting/ogp.png">
+<meta property="og:image:alt" content="マスガキ - 手書き・速記・筆談アプリ">
+<meta property="og:locale" content="ja_JP">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="マスガキ — 手書き文字でメモを作るウェブアプリ">
-<meta name="twitter:description" content="指で書いて、そのままメモに。インストール不要・オフライン対応の手書きメモアプリ。">
+<meta name="twitter:title" content="マスガキ — 手書き・速記・筆談のためのメモアプリ">
+<meta name="twitter:description" content="指で書いて、そのままメモに。走り書き・速記・筆談にも便利。インストール不要・オフライン対応の手書きメモアプリ。">
 <meta name="twitter:image" content="https://pluteus.github.io/handwriting/ogp.png">
 
 <!-- PWA / Web App -->
@@ -34,10 +36,17 @@
   "@context": "https://schema.org",
   "@type": "WebApplication",
   "name": "マスガキ",
+  "alternateName": ["走り書きアプリ", "手書きアプリ", "速記アプリ", "筆談アプリ", "Handwriting App", "Shorthand App"],
   "url": "https://pluteus.github.io/handwriting/",
-  "description": "スマホやタブレットで指やペンを使って手書き文字をそのままメモにできる軽量ウェブアプリ。インストール不要・オフライン対応。",
+  "description": "スマホやタブレットで指やペンを使って手書き文字をそのままメモにできる軽量ウェブアプリ。走り書き・速記・筆談にも便利。インストール不要・オフライン対応。A lightweight browser-based handwriting app for quick notes, shorthand, and written communication.",
   "applicationCategory": "Productivity",
   "operatingSystem": "Web",
+  "inLanguage": "ja",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "JPY"
+  },
   "author": {
     "@type": "Person",
     "name": "pluteus"
@@ -954,7 +963,7 @@
 // ===== 翻訳データ =====
 const translations = {
   ja: {
-    pageTitle: "マスガキ — 手書き文字でメモを作るウェブアプリ",
+    pageTitle: "マスガキ — 手書き・速記・筆談のためのメモアプリ",
     headerEyebrow: "Web App · 手書きメモ · PWA",
     h1: "指で書いて、<br><em>そのまま</em>メモにする。",
     headerDesc: "マスガキは、タッチ画面に指でひと文字ずつ書いて、手書き文字のまま並べてメモを作るウェブアプリです。インストール不要で、オフラインでも使えます。",
@@ -1061,7 +1070,7 @@ const translations = {
     footerText: "マスガキ &mdash; 手書き文字でメモを作るウェブアプリ",
   },
   en: {
-    pageTitle: "Masugaki — A Web App for Handwritten Memos",
+    pageTitle: "Masugaki — Handwriting, Shorthand & Written Communication App",
     headerEyebrow: "Web App · Handwriting Memo · PWA",
     h1: "Write with your finger,<br><em>keep it</em> as your memo.",
     headerDesc: "Masugaki is a web app that lets you write characters one by one with your finger on a touchscreen and arrange your handwritten strokes into a memo. No installation needed — works offline too.",
