@@ -1557,6 +1557,12 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const sel = getSelectedElements();
             if (sel.length === 0) return false;
 
+            // 選択範囲が属していた行を、出現順を保ったまま記録しておく
+            const affectedLines = [];
+            sel.forEach(el => {
+                if (affectedLines.indexOf(el.parentNode) === -1) affectedLines.push(el.parentNode);
+            });
+
             const firstSel = sel[0];
             const parentLine = firstSel.parentNode;
 
@@ -1564,6 +1570,18 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             currentLine = parentLine;
 
             sel.forEach(el => el.remove());
+
+            // 複数行にまたがる選択を消去した場合の後始末：
+            //  - 末尾の行に選択されなかった文字が残っていれば、
+            //    カーソルのある行の末尾へ移動して1行に連結する（改行そのものを解消）
+            //  - 結果として空になった行は取り除く（空行だけ残る不具合の対策）
+            affectedLines.forEach(line => {
+                if (line === currentLine) return;
+                if (!line || !line.isConnected) return;
+                const remaining = Array.from(line.querySelectorAll('.char-item, .space-char'));
+                remaining.forEach(el => currentLine.appendChild(el));
+                if (!line.querySelector('.char-item, .space-char, .cursor')) line.remove();
+            });
 
             cursor.classList.remove('hidden');
             return true;
@@ -1734,7 +1752,27 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             if (hadSelected.length > 0) {
                 hadSelected.forEach(el => el.classList.add('selected'));
                 if (!copySelectedToClipboard()) { _cutSnapshot = []; return; }
+
+                const affectedLines = [];
+                hadSelected.forEach(el => {
+                    if (affectedLines.indexOf(el.parentNode) === -1) affectedLines.push(el.parentNode);
+                });
+
+                const firstSel = hadSelected[0];
+                const mergeLine = firstSel.parentNode;
+                mergeLine.insertBefore(cursor, firstSel);
+                currentLine = mergeLine;
+
                 hadSelected.forEach(el => el.remove());
+
+                affectedLines.forEach(line => {
+                    if (line === currentLine) return;
+                    if (!line || !line.isConnected) return;
+                    const remaining = Array.from(line.querySelectorAll('.char-item, .space-char'));
+                    remaining.forEach(el => currentLine.appendChild(el));
+                    if (!line.querySelector('.char-item, .space-char, .cursor')) line.remove();
+                });
+
                 cursor.classList.remove('hidden');
             }
             _cutSnapshot = [];
@@ -2766,7 +2804,28 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                         if (selectedEls.length > 0) {
                             e.preventDefault();
                             copySelectedToClipboard();
+
+                            const affectedLines = [];
+                            selectedEls.forEach(el => {
+                                if (affectedLines.indexOf(el.parentNode) === -1) affectedLines.push(el.parentNode);
+                            });
+
+                            const firstSel = selectedEls[0];
+                            const mergeLine = firstSel.parentNode;
+                            mergeLine.insertBefore(cursor, firstSel);
+                            currentLine = mergeLine;
+
                             getSelectedElements().forEach(el => el.remove());
+
+                            affectedLines.forEach(line => {
+                                if (line === currentLine) return;
+                                if (!line || !line.isConnected) return;
+                                const remaining = Array.from(line.querySelectorAll('.char-item, .space-char'));
+                                remaining.forEach(el => currentLine.appendChild(el));
+                                if (!line.querySelector('.char-item, .space-char, .cursor')) line.remove();
+                            });
+
+                            cursor.classList.remove('hidden');
                         }
                         return;
                     }
