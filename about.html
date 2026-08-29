@@ -863,6 +863,10 @@
         <summary id="t-faq6q">手書き文字のサイズは変えられますか？</summary>
         <p class="faq-ans" id="t-faq6a">⚙️設定メニューから文字サイズを調整できます。また、罫線エリアはピンチ操作で拡大・縮小して確認することも可能です。</p>
       </details>
+      <details>
+        <summary id="t-faq7q">プライバシーポリシーや利用規約はありますか？</summary>
+        <p class="faq-ans" id="t-faq7a">はい。個人情報の取り扱いについては<a href="../privacy.html">プライバシーポリシー</a>を、ご利用にあたっての条件については<a href="../terms.html">利用規約</a>をご覧ください。</p>
+      </details>
     </div>
   </div>
 </section>
@@ -873,10 +877,11 @@
     <p class="section-label" id="t-bg-label">Background</p>
     <h2 id="t-bg-h2">なぜ「マスガキ」を作ったのか</h2>
     <p class="section-lead" id="t-bg-lead">
-      このアプリは「もっと気軽に、もっと素早く、手書きでメモを残したい」という思いから生まれました。
-      多くのメモアプリは多機能で便利な一方、起動が重かったり、アカウント登録が必要だったりと、
-      ちょっとしたメモを残すにはハードルが高い場面があります。
-      そこで、ブラウザだけで動作し、ページを開いた瞬間に書き始められる軽量な手書きメモツールを目指しました。
+      きっかけは、仕事で文章を手書きメモしたいと思ったことでした。
+      既存の手書きメモアプリの多くは罫線がなく自由に書ける分、後でまとめて読み返したり文字起こししたりするには扱いにくいものでした。
+      かといって手書き文字認識（手書き文字入力）を使うと、変換ミスの訂正がその都度発生して煩わしく、思考の流れが途切れてしまいます。
+      「まずは罫線に沿って手書きだけ済ませておき、文字起こしはあとでまとめて行いたい」という自分自身の需要から、
+      罫線付きでノートのように書き進められる、認識・変換なしの手書きメモツールとして生まれたのがマスガキです。
     </p>
   </div>
 </section>
@@ -1046,9 +1051,11 @@ const translations = {
     faq5a: "一度ページを読み込んだ後はオフラインでも動作します。ホーム画面に追加（PWAインストール）しておくと、より安定してオフライン利用できます。",
     faq6q: "手書き文字のサイズは変えられますか？",
     faq6a: "⚙️設定メニューから文字サイズを調整できます。また、罫線エリアはピンチ操作で拡大・縮小して確認することも可能です。",
+    faq7q: "プライバシーポリシーや利用規約はありますか？",
+    faq7a: "はい。個人情報の取り扱いについては<a href=\"../privacy.html\">プライバシーポリシー</a>を、ご利用にあたっての条件については<a href=\"../terms.html\">利用規約</a>をご覧ください。",
     bgLabel: "Background",
     bgH2: "なぜ「マスガキ」を作ったのか",
-    bgLead: "このアプリは「もっと気軽に、もっと素早く、手書きでメモを残したい」という思いから生まれました。多くのメモアプリは多機能で便利な一方、起動が重かったり、アカウント登録が必要だったりと、ちょっとしたメモを残すにはハードルが高い場面があります。そこで、ブラウザだけで動作し、ページを開いた瞬間に書き始められる軽量な手書きメモツールを目指しました。",
+    bgLead: "きっかけは、仕事で文章を手書きメモしたいと思ったことでした。既存の手書きメモアプリの多くは罫線がなく自由に書ける分、後でまとめて読み返したり文字起こししたりするには扱いにくいものでした。かといって手書き文字認識（手書き文字入力）を使うと、変換ミスの訂正がその都度発生して煩わしく、思考の流れが途切れてしまいます。「まずは罫線に沿って手書きだけ済ませておき、文字起こしはあとでまとめて行いたい」という自分自身の需要から、罫線付きでノートのように書き進められる、認識・変換なしの手書きメモツールとして生まれたのがマスガキです。",
     techLabel: "Technology",
     techH2: "ブラウザだけで動く仕組み",
     techLead: "描画には HTML5 Canvas と Pointer Events API を使用しています。ペン・指・マウスの入力を統一的に扱えるため、デバイスを選ばず自然な書き心地を実現できます。また、描いた内容はブラウザの LocalStorage に保存され、サーバーに送信されることはありません。そのため、オフライン環境でも利用でき、プライバシー面でも安心して使えます。",
@@ -1155,9 +1162,11 @@ const translations = {
     faq5a: "Yes, once the page is loaded it works offline. For the most reliable offline experience, install it as a PWA by adding it to your home screen.",
     faq6q: "Can I change the handwriting size?",
     faq6a: "Yes, adjust character size in the ⚙️ settings menu. You can also pinch the ruled area to zoom in or out for a comfortable view.",
+    faq7q: "Is there a privacy policy or terms of use?",
+    faq7a: "Yes. Please see the <a href=\"../privacy.html\">Privacy Policy</a> for how personal information is handled, and the <a href=\"../terms.html\">Terms of Use</a> for the conditions of use.",
     bgLabel: "Background",
     bgH2: "Why Masugaki?",
-    bgLead: "This app was born from the desire to take handwritten notes more casually and quickly. Many note apps are feature-rich and convenient, but they can be slow to launch or require account registration, raising the barrier for quick jottings. Masugaki aims to be a lightweight handwriting tool that runs in the browser and lets you start writing the moment you open the page.",
+    bgLead: "It started when I wanted to take handwritten notes for work. Most existing handwriting apps let you write freely with no ruled lines, which made it hard to review or transcribe notes later. Handwriting recognition (converting strokes to text) was an alternative, but correcting misrecognitions on the spot was tedious and kept breaking my train of thought. What I actually wanted was to write everything by hand along ruled lines first, then transcribe it all at once afterward. Masugaki grew out of that need: a handwriting memo tool with ruled paper and no recognition or conversion at all.",
     techLabel: "Technology",
     techH2: "How It Works — All in the Browser",
     techLead: "Drawing uses the HTML5 Canvas API and the Pointer Events API. By handling pen, finger, and mouse input uniformly, the app delivers a natural writing feel on any device. Written content is stored in the browser's LocalStorage and never sent to a server, so it works offline and your privacy is fully protected.",
@@ -1262,7 +1271,7 @@ function setLang(lang) {
   // FAQ
   setText('t-faq-label', t.faqLabel);
   setText('t-faq-h2', t.faqH2);
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 7; i++) {
     setText(`t-faq${i}q`, t[`faq${i}q`]);
     setText(`t-faq${i}a`, t[`faq${i}a`]);
   }
