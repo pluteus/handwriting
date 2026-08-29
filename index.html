@@ -641,7 +641,7 @@
 <button class="toolbar-btn" id="btnPaste">📥</button>
 <button class="toolbar-btn" id="btnTheme" title="テーマ切替">🌙</button>
 <button class="toolbar-btn" id="btnSettings">⚙️</button>
-<button class="toolbar-btn" id="btnHelp" title="ヘルプ">❓</button>
+<a class="toolbar-btn" id="btnHelp" href="about.html" target="_blank" rel="noopener" title="ヘルプ" style="display:flex;align-items:center;justify-content:center;">❓</a>
 <button class="toolbar-btn" id="btnFullscreen">⛶</button>
     </div>
 
@@ -1974,9 +1974,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
         const settingBrushWidth = document.getElementById('settingBrushWidth');
         const autoTimeDisplay = document.getElementById('autoTimeDisplay');
 
-        document.getElementById('btnHelp').addEventListener('click', function() {
-            window.open('about.html', '_blank');
-        });
+        // ❔ヘルプボタン: 通常の<a href>リンクとしてabout.htmlを新しいタブで開く
 
         document.getElementById('btnSettings').addEventListener('click', function() {
             settingsOverlay.classList.add('show');

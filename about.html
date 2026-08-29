@@ -957,6 +957,7 @@
 <!-- フッター -->
 <footer>
   <p id="t-footer">マスガキ &mdash; 手書き文字でメモを作るウェブアプリ</p>
+  <p style="margin-top:8px;"><a href="../privacy.html" id="t-footer-privacy">プライバシーポリシー</a> ／ <a href="../terms.html" id="t-footer-terms">利用規約</a></p>
 </footer>
 
 <script>
@@ -1068,6 +1069,8 @@ const translations = {
     ctaP: "インストール不要。ブラウザですぐに使い始められます。",
     ctaBtn: "マスガキを開く",
     footerText: "マスガキ &mdash; 手書き文字でメモを作るウェブアプリ",
+    footerPrivacy: "プライバシーポリシー",
+    footerTerms: "利用規約",
   },
   en: {
     pageTitle: "Masugaki — Handwriting, Shorthand & Written Communication App",
@@ -1175,6 +1178,8 @@ const translations = {
     ctaP: "No installation required. Start in your browser right now.",
     ctaBtn: "Open Masugaki",
     footerText: "Masugaki &mdash; A web app for handwritten memos",
+    footerPrivacy: "Privacy Policy",
+    footerTerms: "Terms of Use",
   }
 };
 
@@ -1298,6 +1303,8 @@ function setLang(lang) {
 
   // フッター
   setText('t-footer', t.footerText);
+  setText('t-footer-privacy', t.footerPrivacy);
+  setText('t-footer-terms', t.footerTerms);
 }
 </script>
 </body>
