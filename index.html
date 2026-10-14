@@ -2082,10 +2082,26 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const MAX_SCALE = 4.0;
 
             function applyDisplayScale(scale) {
-                window._displayScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+                const oldScale = window._displayScale || 1.0;
+                const newScale = Math.round(Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale)) * 100) / 100;
                 const zc = document.getElementById('zoomContainer');
-                if (zc) zc.style.transform = 'scale(' + window._displayScale.toFixed(2) + ')';
-                zoomLabel.textContent = '×' + window._displayScale.toFixed(1);
+
+                // 表示エリア中心の下にある内容座標（scale=1基準）を記録
+                const cs   = getComputedStyle(displayArea);
+                const padL = parseFloat(cs.paddingLeft) || 0;
+                const padT = parseFloat(cs.paddingTop)  || 0;
+                const cx   = displayArea.clientWidth  / 2;
+                const cy   = displayArea.clientHeight / 2;
+                const contentX = (displayArea.scrollLeft + cx - padL) / oldScale;
+                const contentY = (displayArea.scrollTop  + cy - padT) / oldScale;
+
+                window._displayScale = newScale;
+                if (zc) zc.style.transform = 'scale(' + newScale.toFixed(2) + ')';
+                zoomLabel.textContent = '×' + newScale.toFixed(1);
+
+                // 同じ内容座標が表示エリア中心に来るようスクロール
+                displayArea.scrollLeft = contentX * newScale + padL - cx;
+                displayArea.scrollTop  = contentY * newScale + padT - cy;
             }
 
             // ---- 高さ計算 ----
@@ -2332,6 +2348,15 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
             let pinchStartDist = 0;
             let pinchStartScale = 1.0;
+            let pinchContentX = 0, pinchContentY = 0; // ピンチ中心の下にある内容座標（scale=1基準）
+
+            function getZoomPadding() {
+                const cs = getComputedStyle(displayArea);
+                return {
+                    left: parseFloat(cs.paddingLeft) || 0,
+                    top:  parseFloat(cs.paddingTop)  || 0
+                };
+            }
 
             function getTouchDist(t) {
                 const dx = t[0].clientX - t[1].clientX;
@@ -2622,10 +2647,13 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     pinchStartScale = window._displayScale || currentScale;
                     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                    scrollStartX = mx;
-                    scrollStartY = my;
-                    scrollOriginLeft = displayArea.scrollLeft;
-                    scrollOriginTop  = displayArea.scrollTop;
+
+                    // ピンチ中心の下にある内容座標を記録
+                    const daRect = displayArea.getBoundingClientRect();
+                    const pad = getZoomPadding();
+                    pinchContentX = (mx - daRect.left + displayArea.scrollLeft - pad.left) / pinchStartScale;
+                    pinchContentY = (my - daRect.top  + displayArea.scrollTop  - pad.top)  / pinchStartScale;
+
                     clearSelection();
                 }
                 if (mode !== 'idle' && mode !== 'mouse_selecting') e.preventDefault();
@@ -2680,8 +2708,6 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                     const pinchRatio = dist / pinchStartDist;
-                    const scrollDX   = mx - scrollStartX;
-                    const scrollDY   = my - scrollStartY;
 
                     let newScale = pinchStartScale * pinchRatio;
                     newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
@@ -2692,8 +2718,11 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     const zl = document.getElementById('dividerZoomLabel');
                     if (zl) zl.textContent = '×' + currentScale.toFixed(1);
 
-                    displayArea.scrollLeft = scrollOriginLeft - scrollDX;
-                    displayArea.scrollTop  = scrollOriginTop  - scrollDY;
+                    // 記録した内容座標が現在の指の中心位置に来るようスクロール
+                    const daRect = displayArea.getBoundingClientRect();
+                    const pad = getZoomPadding();
+                    displayArea.scrollLeft = pinchContentX * currentScale + pad.left - (mx - daRect.left);
+                    displayArea.scrollTop  = pinchContentY * currentScale + pad.top  - (my - daRect.top);
                 }
             }, { passive: false });
 
