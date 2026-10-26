@@ -615,6 +615,34 @@
             background: #666666;
             box-shadow: 0 -5px 0 #666666, 0 5px 0 #666666;
         }
+        /* === 表示エリアのカスタムスクロールバー === */
+        .sb-track {
+            position: fixed;
+            z-index: 60;
+            display: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .sb-v { width: 22px; }
+        .sb-h { height: 22px; }
+        .sb-thumb {
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+        .sb-v .sb-thumb { width: 22px; }
+        .sb-h .sb-thumb { height: 22px; }
+        .sb-thumb::after {
+            content: '';
+            position: absolute;
+            border-radius: 6px;
+            background: rgba(120, 120, 120, 0.55);
+            transition: background 0.15s;
+        }
+        .sb-v .sb-thumb::after { right: 3px; top: 0; bottom: 0; width: 8px; }
+        .sb-h .sb-thumb::after { bottom: 3px; left: 0; right: 0; height: 8px; }
+        .sb-track.active .sb-thumb::after { background: rgba(233, 69, 96, 0.85); }
     </style>
 </head>
 <body>
@@ -3148,6 +3176,140 @@ document.getElementById('btnRedo').addEventListener('click', redo);
         // 起動時: ローカル保存データを復元
         // ============================================================
         loadFromLocalStorage();
+
+        // ============================================================
+        // 表示エリア用カスタムスクロールバー（右端・下端／ドラッグで高速スクロール）
+        // ============================================================
+        (function() {
+            const area = displayArea;
+            const zc   = document.getElementById('zoomContainer');
+            const BAR = 22;
+            const MIN_THUMB = 44;
+
+            function make(cls) {
+                const track = document.createElement('div');
+                track.className = 'sb-track ' + cls;
+                const thumb = document.createElement('div');
+                thumb.className = 'sb-thumb';
+                track.appendChild(thumb);
+                document.body.appendChild(track);
+                return { track: track, thumb: thumb };
+            }
+            const bars = { v: make('sb-v'), h: make('sb-h') };
+
+            function metrics(axis) {
+                const vert = axis === 'v';
+                const client = vert ? area.clientHeight : area.clientWidth;
+                const size   = vert ? area.scrollHeight : area.scrollWidth;
+                const otherNeed = vert
+                    ? (area.scrollWidth  > area.clientWidth  + 1)
+                    : (area.scrollHeight > area.clientHeight + 1);
+                const len = Math.max(1, client - (otherNeed ? BAR : 0));
+                const thumbLen = Math.min(len, Math.max(MIN_THUMB, len * client / size));
+                const max = Math.max(0, size - client);
+                const cur = vert ? area.scrollTop : area.scrollLeft;
+                const thumbStart = max > 0 ? (cur / max) * (len - thumbLen) : 0;
+                return { vert: vert, len: len, thumbLen: thumbLen, max: max, thumbStart: thumbStart,
+                         need: size > client + 1 };
+            }
+
+            let raf = 0;
+            function layout() {
+                raf = 0;
+                const r = area.getBoundingClientRect();
+                const mv = metrics('v'), mh = metrics('h');
+
+                bars.v.track.style.display = mv.need ? 'block' : 'none';
+                bars.h.track.style.display = mh.need ? 'block' : 'none';
+
+                if (mv.need) {
+                    const t = bars.v.track.style;
+                    t.left   = (r.left + area.clientWidth - BAR) + 'px';
+                    t.top    = r.top + 'px';
+                    t.height = mv.len + 'px';
+                    bars.v.thumb.style.height    = mv.thumbLen + 'px';
+                    bars.v.thumb.style.transform = 'translateY(' + mv.thumbStart + 'px)';
+                }
+                if (mh.need) {
+                    const t = bars.h.track.style;
+                    t.left  = r.left + 'px';
+                    t.top   = (r.top + area.clientHeight - BAR) + 'px';
+                    t.width = mh.len + 'px';
+                    bars.h.thumb.style.width     = mh.thumbLen + 'px';
+                    bars.h.thumb.style.transform = 'translateX(' + mh.thumbStart + 'px)';
+                }
+            }
+            function schedule() {
+                if (!raf) raf = requestAnimationFrame(layout);
+            }
+
+            function attach(axis) {
+                const bar = bars[axis];
+                let dragging = false;
+                let grab = 0;
+                let m = null;
+
+                function pointerPos(e) {
+                    const rect = bar.track.getBoundingClientRect();
+                    return axis === 'v' ? e.clientY - rect.top : e.clientX - rect.left;
+                }
+                function apply(p) {
+                    const free = m.len - m.thumbLen;
+                    const ratio = free > 0 ? Math.min(1, Math.max(0, (p - grab) / free)) : 0;
+                    area[axis === 'v' ? 'scrollTop' : 'scrollLeft'] = ratio * m.max;
+                }
+
+                bar.track.addEventListener('pointerdown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    m = metrics(axis);
+                    if (!m.need) return;
+                    bar.track.setPointerCapture(e.pointerId);
+                    const p = pointerPos(e);
+                    if (p >= m.thumbStart && p <= m.thumbStart + m.thumbLen) {
+                        grab = p - m.thumbStart;      // つまみをそのままドラッグ
+                    } else {
+                        grab = m.thumbLen / 2;        // トラックをタップ → その位置へジャンプ
+                    }
+                    dragging = true;
+                    bar.track.classList.add('active');
+                    apply(p);
+                });
+                bar.track.addEventListener('pointermove', function(e) {
+                    if (!dragging) return;
+                    e.preventDefault();
+                    apply(pointerPos(e));
+                });
+                function end() {
+                    dragging = false;
+                    bar.track.classList.remove('active');
+                }
+                bar.track.addEventListener('pointerup', end);
+                bar.track.addEventListener('pointercancel', end);
+            }
+            attach('v');
+            attach('h');
+
+            area.addEventListener('scroll', schedule, { passive: true });
+            window.addEventListener('resize', schedule);
+            document.addEventListener('fullscreenchange', function() {
+                schedule();
+                setTimeout(schedule, 200);
+            });
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(schedule);
+                ro.observe(area);
+                ro.observe(document.body);
+            }
+            // 文字の増減・ズーム（style変更）にも追従
+            new MutationObserver(schedule).observe(zc, {
+                childList: true, subtree: true,
+                attributes: true, attributeFilter: ['style']
+            });
+            // 念のための定期更新（レイアウト変化の取りこぼし対策）
+            setInterval(schedule, 500);
+            schedule();
+        })();
         // ============================================================
 
         // ============================================================
