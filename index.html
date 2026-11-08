@@ -2774,7 +2774,47 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     if (mode !== 'selecting') mode = 'idle';
                 }
             }, { passive: true });
+                    // === タッチパッドのピンチ（ctrl+wheel）→ 罫線エリアのズーム ===
+            displayArea.addEventListener('wheel', function(e) {
+                if (!e.ctrlKey) return;          // 通常のホイールスクロールはそのまま
+                e.preventDefault();              // ページズームを禁止
+
+                const oldScale = window._displayScale || currentScale;
+                let newScale = oldScale * Math.exp(-e.deltaY * 0.01);
+                newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
+                newScale = Math.round(newScale * 100) / 100;
+                if (newScale === oldScale) return;
+
+                // カーソル位置の下にある内容座標を記録
+                const daRect = displayArea.getBoundingClientRect();
+                const pad = getZoomPadding();
+                const px = e.clientX - daRect.left;
+                const py = e.clientY - daRect.top;
+                const contentX = (displayArea.scrollLeft + px - pad.left) / oldScale;
+                const contentY = (displayArea.scrollTop  + py - pad.top)  / oldScale;
+
+                currentScale = newScale;
+                window._displayScale = newScale;
+                zoomContainer.style.transform = 'scale(' + newScale + ')';
+                const zl = document.getElementById('dividerZoomLabel');
+                if (zl) zl.textContent = '\u00d7' + newScale.toFixed(1);
+
+                // 同じ内容がカーソル位置に残るようスクロール補正
+                displayArea.scrollLeft = contentX * newScale + pad.left - px;
+                displayArea.scrollTop  = contentY * newScale + pad.top  - py;
+            }, { passive: false });
         })();
+        // === ページ全体のズーム禁止（ctrl+wheel / ctrl + +,-,0）===
+        document.addEventListener('wheel', function(e) {
+            if (e.ctrlKey) e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+
         // === ここから追加：キーボードイベント制御（コピペ対応版） ===
         (function() {
             // ヘルパー：選択ハイライトの更新（範囲指定）
