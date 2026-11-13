@@ -501,6 +501,52 @@
             opacity: 1;
         }
 
+        /* === キーボード入力欄（スライダー直下） === */
+        .keyboard-input-bar {
+            width: 100%;
+            background: #f5f5f5;
+            padding: 6px 10px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .keyboard-input-bar input {
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 16px;
+            padding: 8px 10px;
+            border: 1px solid #bbbbbb;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #222222;
+            outline: none;
+        }
+        .keyboard-input-bar input:focus {
+            border-color: #e94560;
+        }
+
+        body.dark-theme .keyboard-input-bar {
+            background: #111111;
+            border-bottom-color: #333333;
+        }
+        body.dark-theme .keyboard-input-bar input {
+            background: #222222;
+            border-color: #555555;
+            color: #eeeeee;
+        }
+
+        /* キーボードで入力したテキスト文字（罫線エリア内） */
+        .text-char {
+            font-size: 26px;
+            line-height: 32px;
+            text-align: center;
+            min-width: 14px;
+            color: #222222;
+        }
+        body.dark-theme .text-char {
+            color: #eeeeee;
+        }
+
         body.fullscreen .divider-slider {
             /* フルスクリーン時も表示 */
         }
@@ -730,6 +776,10 @@
 
     <div class="divider-slider" id="dividerSlider">
         <span class="divider-zoom-label" id="dividerZoomLabel">×1.0</span>
+    </div>
+
+    <div class="keyboard-input-bar" id="keyboardInputBar">
+        <input type="text" id="keyboardInput" placeholder="キーボード入力：打った文字がカーソル位置に入ります" autocomplete="off" autocapitalize="off">
     </div>
 
     <div class="input-area">
@@ -1666,10 +1716,16 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             span.className = el.className.replace(' selected', '');
             span.style.cssText = el.style.cssText;
             if (el.classList.contains('char-item')) {
-                const img = document.createElement('img');
-                img.src = el.querySelector('img').src;
-                img.alt = '手書き文字';
-                span.appendChild(img);
+                const srcImg = el.querySelector('img');
+                if (srcImg) {
+                    const img = document.createElement('img');
+                    img.src = srcImg.src;
+                    img.alt = '手書き文字';
+                    span.appendChild(img);
+                } else {
+                    // キーボード入力のテキスト文字はテキストのまま複製する
+                    span.textContent = el.textContent;
+                }
             }
             return span;
         }
@@ -1865,6 +1921,74 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             scrollCursorIntoView();
         });
 
+        // === キーボード入力欄（スライダー直下） ===
+        // 入力した文字を、罫線エリアの現在のカーソル位置へテキストとして挿入する。
+        // 日本語入力（IME変換中）は、変換が確定した時点でまとめて挿入する。
+        (function() {
+            const kbInput = document.getElementById('keyboardInput');
+            if (!kbInput) return;
+            let kbComposing = false;
+
+            function insertTypedText(str) {
+                if (!str) return;
+                saveHistory();
+                finalizeAll();
+                replaceSelectionWithCursor();
+                for (const ch of str) {
+                    if (ch === ' ' || ch === '　') {
+                        const space = document.createElement('span');
+                        space.className = 'space-char';
+                        currentLine.insertBefore(space, cursor);
+                    } else {
+                        const span = document.createElement('span');
+                        span.className = 'char-item text-char';
+                        span.textContent = ch;
+                        currentLine.insertBefore(span, cursor);
+                    }
+                }
+                scrollCursorIntoView();
+            }
+
+            function flushKbInput() {
+                const v = kbInput.value;
+                if (v) {
+                    kbInput.value = '';
+                    insertTypedText(v);
+                }
+            }
+
+            kbInput.addEventListener('compositionstart', function() {
+                kbComposing = true;
+            });
+            kbInput.addEventListener('compositionend', function(e) {
+                kbComposing = false;
+                // 変換確定した文字列を挿入し、入力欄は空に戻す
+                const v = (e.data != null && e.data !== '') ? e.data : kbInput.value;
+                kbInput.value = '';
+                insertTypedText(v);
+            });
+            kbInput.addEventListener('input', function(e) {
+                if (kbComposing || e.isComposing) return; // IME変換中は何もしない
+                flushKbInput();
+            });
+            kbInput.addEventListener('keydown', function(e) {
+                if (kbComposing || e.isComposing) return;
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    flushKbInput();
+                    document.getElementById('btnEnter').click();
+                } else if (e.key === 'Backspace' && kbInput.value === '') {
+                    // 欄が空のときのBackspaceは、シート側の1文字削除として扱う。
+                    // 全体のkeydownハンドラは入力欄フォーカス中は無効になるため、
+                    // 一度フォーカスを外してから⌫ボタンの処理を呼び、再度フォーカスする。
+                    e.preventDefault();
+                    kbInput.blur();
+                    document.getElementById('btnBackspace').click();
+                    kbInput.focus();
+                }
+            });
+        })();
+
         // === ツールバー機能 ===
         function captureDisplayArea() {
             finalizeAll();
@@ -1914,6 +2038,13 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                         if (img && img.complete) {
                             const w = parseInt(char.style.width) || 32;
                             cctx.drawImage(img, x, y, w, 32);
+                            x += w + 4;
+                        } else if (char.classList.contains('text-char')) {
+                            // キーボード入力のテキスト文字は文字として描く
+                            const w = char.getBoundingClientRect().width;
+                            cctx.fillStyle = '#000000';
+                            cctx.font = '26px sans-serif';
+                            cctx.fillText(char.textContent, x, y + 28);
                             x += w + 4;
                         }
                     }
@@ -2101,6 +2232,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const toolbar     = document.getElementById('toolbar');
             const slider      = document.getElementById('dividerSlider');
             const zoomLabel   = document.getElementById('dividerZoomLabel');
+            const kbBar       = document.getElementById('keyboardInputBar');
 
             // ---- ズーム状態（罫線エリアのscale）----
             // zoomContainerへの参照はこのIIFE内では取得できないため
@@ -2145,8 +2277,9 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     getComputedStyle(document.documentElement).getPropertyValue('--btn-size')
                 ) || 48;
                 const buttonsW      = btnSize + 20;
+                const kbBarH        = kbBar ? kbBar.offsetHeight : 0;
                 const inputSquareSide = (appW - buttonsW) / 2;
-                const borderY       = appH - inputSquareSide - sliderH;
+                const borderY       = appH - inputSquareSide - sliderH - kbBarH;
                 return Math.max(100, borderY - toolbarH);
             }
 
@@ -2164,19 +2297,32 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
                 const totalH = inputArea.clientHeight;
                 const finalH = Math.max(40, totalH - PADDING);
-                // 手書き枠はデフォルトで正方形: 幅(2枠+ボタン列+余白を除いた
-                // 残りを2等分)と高さの小さい方を一辺として、両枠に同じ
-                // 正方形サイズを明示する。
                 const buttonsEl = inputArea.querySelector('.buttons');
                 const buttonsW  = buttonsEl ? buttonsEl.offsetWidth : 0;
                 const availW    = inputArea.clientWidth - PADDING - 16 - buttonsW;
-                const side      = Math.max(40, Math.floor(Math.min(availW / 2, finalH)));
-                inputArea.style.setProperty('--cv-h', side + 'px');
+                // 手書き枠のサイズ:
+                //  - デフォルト（読み込み直後・userMoved=false）は正方形:
+                //    幅(2枠+ボタン列+余白を除いた残りを2等分)と高さの小さい方を
+                //    一辺として、両枠に同じ正方形サイズを明示する。
+                //  - スライダーを上下ドラッグして入力エリアの高さを変えた後
+                //    （userMoved=true）は、長方形のまま入力エリアいっぱいに
+                //    最大化する（各枠 = 横幅の半分 × 行の高さ全体）。
+                //    リロードすると userMoved が初期化され正方形に戻る。
+                let frameW, frameH;
+                if (userMoved) {
+                    frameW = Math.max(40, Math.floor(availW / 2));
+                    frameH = finalH;
+                } else {
+                    const side = Math.max(40, Math.floor(Math.min(availW / 2, finalH)));
+                    frameW = side;
+                    frameH = side;
+                }
+                inputArea.style.setProperty('--cv-h', frameH + 'px');
                 ['wrapper1', 'wrapper2'].forEach(id => {
                     const wr = document.getElementById(id);
                     if (wr) {
                         wr.style.flex  = '0 0 auto';
-                        wr.style.width = side + 'px';
+                        wr.style.width = frameW + 'px';
                     }
                 });
 
@@ -2199,7 +2345,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     });
                 });
 
-                const btnSize = Math.max(40, Math.floor(side / 4));
+                const btnSize = Math.max(40, Math.floor(frameH / 4));
                 inputArea.style.setProperty('--btn-size', btnSize + 'px');
             }
 
@@ -2317,8 +2463,9 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 requestAnimationFrame(function() {
                     requestAnimationFrame(function() {
                         const sliderH = slider ? slider.offsetHeight : 28;
+                        const kbBarH  = kbBar ? kbBar.offsetHeight : 0;
                         const inputH  = document.querySelector('.input-area').offsetHeight;
-                        displayHeight = window.innerHeight - inputH - sliderH;
+                        displayHeight = window.innerHeight - inputH - sliderH - kbBarH;
                         userMoved     = false;
                         checkLayout();
                     });
