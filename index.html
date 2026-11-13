@@ -2164,7 +2164,21 @@ document.getElementById('btnRedo').addEventListener('click', redo);
 
                 const totalH = inputArea.clientHeight;
                 const finalH = Math.max(40, totalH - PADDING);
-                inputArea.style.setProperty('--cv-h', finalH + 'px');
+                // 手書き枠はデフォルトで正方形: 幅(2枠+ボタン列+余白を除いた
+                // 残りを2等分)と高さの小さい方を一辺として、両枠に同じ
+                // 正方形サイズを明示する。
+                const buttonsEl = inputArea.querySelector('.buttons');
+                const buttonsW  = buttonsEl ? buttonsEl.offsetWidth : 0;
+                const availW    = inputArea.clientWidth - PADDING - 16 - buttonsW;
+                const side      = Math.max(40, Math.floor(Math.min(availW / 2, finalH)));
+                inputArea.style.setProperty('--cv-h', side + 'px');
+                ['wrapper1', 'wrapper2'].forEach(id => {
+                    const wr = document.getElementById(id);
+                    if (wr) {
+                        wr.style.flex  = '0 0 auto';
+                        wr.style.width = side + 'px';
+                    }
+                });
 
                 requestAnimationFrame(() => {
                     ['wrapper1', 'wrapper2'].forEach(id => {
@@ -2185,7 +2199,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     });
                 });
 
-                const btnSize = Math.max(40, Math.floor(finalH / 4));
+                const btnSize = Math.max(40, Math.floor(side / 4));
                 inputArea.style.setProperty('--btn-size', btnSize + 'px');
             }
 

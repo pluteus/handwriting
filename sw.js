@@ -3,7 +3,7 @@
 // index.html と同じディレクトリに置いてください
 // ============================================================
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME    = 'hashirigaki-memo-' + CACHE_VERSION;
 
 // キャッシュ対象ファイル（相対パス）
