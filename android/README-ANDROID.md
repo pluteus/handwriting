@@ -11,7 +11,7 @@ PWA版（このリポジトリの `index.html`）をそのまま表示する Web
   🎤ボタンはAndroid標準の `SpeechRecognizer` に橋渡ししています
   （`window.HandwritingAndroid.startSpeech()` → 結果は
   `window.__onNativeSpeechResult(text)` でWeb側へ返ります）。
-- 言語は ja-JP、OS標準の認識サービス（通常はGoogleの音声入力）を使います。
+- 言語は設定→音声入力タブで指定でき（既定は日本語 ja-JP）、OS標準の認識サービス（通常はGoogleの音声入力）を使います。言語タグはハイフン形式（ja-JP）で渡します（ja_JP形式は認識エンジンに無視されローマ字書き取りになる場合があります）。
   APIキーやLLMは使いません。
 
 ## ビルド

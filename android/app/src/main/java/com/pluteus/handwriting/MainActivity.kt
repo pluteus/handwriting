@@ -48,10 +48,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private var pendingLang: String? = null
+
     inner class SpeechBridge {
         @JavascriptInterface
         fun startSpeech() {
             mainHandler.post { startSpeechInternal() }
+        }
+
+        @JavascriptInterface
+        fun startSpeech(lang: String?) {
+            mainHandler.post {
+                pendingLang = lang?.trim() ?: ""
+                startSpeechInternal()
+            }
         }
 
         @JavascriptInterface
@@ -169,7 +179,19 @@ class MainActivity : AppCompatActivity() {
                     RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                 )
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.JAPAN.toString())
+                // 言語タグは必ずハイフン形式（ja-JP）で渡す。
+                // Locale.JAPAN.toString() の "ja_JP" は認識エンジンに無視され、
+                // 英語扱いでローマ字書き取りになる場合があるため使わない。
+                // pendingLang: null=未指定（既定の日本語） / ""=端末の既定（自動） / それ以外=指定タグ
+                val lang = pendingLang
+                if (lang == null) {
+                    val def = Locale.JAPAN.toLanguageTag()
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, def)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, def)
+                } else if (lang.isNotEmpty()) {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+                }
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             }
