@@ -525,6 +525,169 @@
             border-color: #e94560;
         }
 
+        /* === 音声入力（マイクボタン＋ステータス） === */
+        .keyboard-input-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .keyboard-input-bar input {
+            flex: 1;
+            min-width: 0;
+            width: auto;
+        }
+        .mic-btn {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid #bbbbbb;
+            background: #ffffff;
+            font-size: 19px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+        }
+        .mic-btn:active {
+            background: #f0f0f0;
+        }
+        .mic-btn.recording {
+            background: #e94560;
+            border-color: #e94560;
+            animation: mic-pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes mic-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(233,69,96,0.45); }
+            50% { box-shadow: 0 0 0 8px rgba(233,69,96,0); }
+        }
+        body.dark-theme .mic-btn {
+            background: #222222;
+            border-color: #555555;
+        }
+        .voice-status {
+            display: none;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: #b03060;
+            background: #fdf0f3;
+            border-bottom: 1px solid #f3d3dc;
+        }
+        .voice-status.show {
+            display: block;
+        }
+        body.dark-theme .voice-status {
+            background: #2a1218;
+            color: #f0a0b5;
+            border-bottom-color: #4a2530;
+        }
+
+        /* === 設定タブ === */
+        .settings-panel {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .settings-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+        .settings-tab {
+            flex: 1;
+            padding: 8px 0;
+            font-size: 14px;
+            background: #eeeeee;
+            color: #333333;
+            border: 1px solid #cccccc;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .settings-tab.active {
+            background: #e94560;
+            border-color: #e94560;
+            color: #ffffff;
+        }
+        body.dark-theme .settings-tab {
+            background: #333333;
+            color: #eeeeee;
+            border-color: #555555;
+        }
+        body.dark-theme .settings-tab.active {
+            background: #e94560;
+            border-color: #e94560;
+            color: #ffffff;
+        }
+        .voice-field {
+            margin-bottom: 14px;
+        }
+        .voice-label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+        .settings-input-wide {
+            width: 100%;
+            text-align: left;
+            box-sizing: border-box;
+        }
+        select.settings-input-wide {
+            padding: 6px 8px;
+            font-size: 14px;
+        }
+        .voice-key-link {
+            font-size: 13px;
+            color: #1a6fc4;
+            word-break: break-all;
+        }
+        .voice-note {
+            font-size: 11px;
+            color: #888888;
+            margin-top: 4px;
+        }
+        .voice-test-btn {
+            width: 100%;
+            padding: 9px;
+            background: #1a6fc4;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .voice-test-btn:disabled {
+            opacity: 0.6;
+        }
+        .voice-test-status {
+            font-size: 12px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .voice-test-status.ok { color: #1e8e4f; }
+        .voice-test-status.err { color: #c0272d; }
+        .voice-model-list {
+            max-height: 170px;
+            overflow-y: auto;
+            margin-top: 8px;
+            border: 1px solid #dddddd;
+            border-radius: 6px;
+            display: none;
+        }
+        .voice-model-list.show { display: block; }
+        .voice-model-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 8px 10px;
+            font-size: 13px;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #eeeeee;
+            cursor: pointer;
+            color: inherit;
+            word-break: break-all;
+        }
+        .voice-model-item:active { background: #fdeef1; }
+
         body.dark-theme .keyboard-input-bar {
             background: #111111;
             border-bottom-color: #333333;
@@ -726,6 +889,11 @@
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-panel">
             <div class="settings-title">設定</div>
+            <div class="settings-tabs">
+                <button class="settings-tab active" id="tabBasic">基本設定</button>
+                <button class="settings-tab" id="tabVoice">音声入力</button>
+            </div>
+            <div class="settings-pane" id="paneBasic">
             <div class="settings-row">
                 <span class="settings-label">自動確定時間</span>
                 <div>
@@ -761,6 +929,42 @@
                     <span class="settings-unit">px</span>
                 </div>
             </div>
+            </div>
+            <div class="settings-pane" id="paneVoice" style="display:none;">
+                <div class="voice-field">
+                    <span class="voice-label">API提供元</span>
+                    <select class="settings-input settings-input-wide" id="voiceProvider">
+                        <option value="openai">OpenAI</option>
+                        <option value="groq">Groq</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="custom">カスタム（OpenAI互換API）</option>
+                    </select>
+                </div>
+                <div class="voice-field">
+                    <span class="voice-label">キー取得先</span>
+                    <a class="voice-key-link" id="voiceKeyLink" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>
+                    <div class="voice-note" id="voiceKeyNote"></div>
+                </div>
+                <div class="voice-field">
+                    <span class="voice-label">APIキー</span>
+                    <input type="password" class="settings-input settings-input-wide" id="voiceApiKey" placeholder="APIキーを入力" autocomplete="off">
+                    <div class="voice-note">キーはこの端末のブラウザ内にのみ保存され、メモの保存データには含まれません。</div>
+                </div>
+                <div class="voice-field" id="voiceBaseRow" style="display:none;">
+                    <span class="voice-label">ベースURL</span>
+                    <input type="text" class="settings-input settings-input-wide" id="voiceBaseUrl" placeholder="https://example.com/v1" autocomplete="off">
+                </div>
+                <div class="voice-field">
+                    <span class="voice-label">モデルID</span>
+                    <input type="text" class="settings-input settings-input-wide" id="voiceModelId" placeholder="whisper-1" autocomplete="off">
+                    <div class="voice-note">空欄のまま接続テストすると、モデル一覧を取得して選べます。</div>
+                </div>
+                <div class="voice-field">
+                    <button class="voice-test-btn" id="btnVoiceTest">接続テスト</button>
+                    <div class="voice-test-status" id="voiceTestStatus"></div>
+                    <div class="voice-model-list" id="voiceModelList"></div>
+                </div>
+            </div>
             <button class="settings-close" id="btnCloseSettings">閉じる</button>
             <button class="settings-close" id="btnClearMemo" style="margin-top:8px; background:#e94560;">メモをクリア</button>
         </div>
@@ -780,7 +984,9 @@
 
     <div class="keyboard-input-bar" id="keyboardInputBar">
         <input type="text" id="keyboardInput" placeholder="キーボード入力：打った文字がカーソル位置に入ります" autocomplete="off" autocapitalize="off">
+        <button class="mic-btn" id="btnMic" title="音声入力">🎤</button>
     </div>
+    <div class="voice-status" id="voiceStatus"></div>
 
     <div class="input-area">
         <div class="canvas-wrapper active" id="wrapper1">
@@ -1949,6 +2155,8 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 scrollCursorIntoView();
             }
 
+            window.__kbInsertText = insertTypedText;
+
             function flushKbInput() {
                 const v = kbInput.value;
                 if (v) {
@@ -1986,6 +2194,287 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     document.getElementById('btnBackspace').click();
                     kbInput.focus();
                 }
+            });
+        })();
+
+        // === 音声入力（LLM文字起こし） ===
+        (function() {
+            const LS_VOICE = 'hashirigaki-voice-v1';
+            const PRESETS = {
+                openai: { base: 'https://api.openai.com/v1', keyUrl: 'https://platform.openai.com/api-keys', keyLabel: 'platform.openai.com/api-keys', modelHint: 'whisper-1' },
+                groq:   { base: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys', keyLabel: 'console.groq.com/keys', modelHint: 'whisper-large-v3-turbo' },
+                gemini: { base: 'https://generativelanguage.googleapis.com/v1beta', keyUrl: 'https://aistudio.google.com/apikey', keyLabel: 'aistudio.google.com/apikey', modelHint: 'gemini-2.0-flash' },
+                custom: { base: '', keyUrl: '', keyLabel: '', modelHint: 'whisper-1' }
+            };
+            const btnMic = document.getElementById('btnMic');
+            const statusEl = document.getElementById('voiceStatus');
+            if (!btnMic) return;
+
+            function loadSettings() {
+                try {
+                    const s = JSON.parse(localStorage.getItem(LS_VOICE) || 'null');
+                    if (s && s.p) return s;
+                } catch (e) { /* ignore */ }
+                return { provider: 'openai', p: { openai: { key: '', model: '' }, groq: { key: '', model: '' }, gemini: { key: '', model: '' }, custom: { key: '', model: '', base: '' } } };
+            }
+            let vs = loadSettings();
+            function saveSettings() {
+                try { localStorage.setItem(LS_VOICE, JSON.stringify(vs)); } catch (e) { /* ignore */ }
+            }
+            function cur() {
+                if (!vs.p[vs.provider]) vs.p[vs.provider] = { key: '', model: '', base: '' };
+                return vs.p[vs.provider];
+            }
+            function baseOf() {
+                if (vs.provider === 'custom') return (cur().base || '').replace(/\/+$/, '');
+                return PRESETS[vs.provider].base;
+            }
+            function showStatus(msg) {
+                if (msg) { statusEl.textContent = msg; statusEl.classList.add('show'); }
+                else { statusEl.textContent = ''; statusEl.classList.remove('show'); }
+            }
+
+            // --- 設定タブの配線 ---
+            const tabBasic = document.getElementById('tabBasic');
+            const tabVoice = document.getElementById('tabVoice');
+            const paneBasic = document.getElementById('paneBasic');
+            const paneVoice = document.getElementById('paneVoice');
+            function switchTab(voice) {
+                tabBasic.classList.toggle('active', !voice);
+                tabVoice.classList.toggle('active', voice);
+                paneBasic.style.display = voice ? 'none' : '';
+                paneVoice.style.display = voice ? '' : 'none';
+            }
+            tabBasic.addEventListener('click', function() { switchTab(false); });
+            tabVoice.addEventListener('click', function() { switchTab(true); });
+
+            const selProvider = document.getElementById('voiceProvider');
+            const inpKey = document.getElementById('voiceApiKey');
+            const inpModel = document.getElementById('voiceModelId');
+            const inpBase = document.getElementById('voiceBaseUrl');
+            const baseRow = document.getElementById('voiceBaseRow');
+            const keyLink = document.getElementById('voiceKeyLink');
+            const keyNote = document.getElementById('voiceKeyNote');
+            const testBtn = document.getElementById('btnVoiceTest');
+            const testStatus = document.getElementById('voiceTestStatus');
+            const modelList = document.getElementById('voiceModelList');
+
+            function refreshVoiceFields() {
+                const pr = PRESETS[vs.provider];
+                const c = cur();
+                selProvider.value = vs.provider;
+                inpKey.value = c.key || '';
+                inpModel.value = c.model || '';
+                inpModel.placeholder = pr.modelHint;
+                inpBase.value = c.base || '';
+                baseRow.style.display = (vs.provider === 'custom') ? '' : 'none';
+                if (pr.keyUrl) {
+                    keyLink.style.display = '';
+                    keyLink.href = pr.keyUrl;
+                    keyLink.textContent = pr.keyLabel;
+                    keyNote.textContent = '';
+                } else {
+                    keyLink.style.display = 'none';
+                    keyNote.textContent = '利用するサービスの管理画面でAPIキーを取得してください。';
+                }
+                testStatus.textContent = '';
+                testStatus.className = 'voice-test-status';
+                modelList.classList.remove('show');
+                modelList.innerHTML = '';
+            }
+            selProvider.addEventListener('change', function() {
+                vs.provider = selProvider.value;
+                saveSettings();
+                refreshVoiceFields();
+            });
+            inpKey.addEventListener('input', function() { cur().key = inpKey.value.trim(); saveSettings(); });
+            inpModel.addEventListener('input', function() { cur().model = inpModel.value.trim(); saveSettings(); });
+            inpBase.addEventListener('input', function() { cur().base = inpBase.value.trim(); saveSettings(); });
+            refreshVoiceFields();
+
+            function setTestStatus(msg, ok) {
+                testStatus.textContent = msg;
+                testStatus.className = 'voice-test-status ' + (ok ? 'ok' : 'err');
+            }
+            async function fetchModels() {
+                const key = (cur().key || '').trim();
+                if (!key) throw new Error('APIキーが入力されていません。');
+                if (vs.provider === 'gemini') {
+                    const res = await fetch(PRESETS.gemini.base + '/models?key=' + encodeURIComponent(key));
+                    const data = await res.json().catch(function() { return null; });
+                    if (!res.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + res.status));
+                    return (data.models || []).map(function(m) { return (m.name || '').replace(/^models\//, ''); }).filter(Boolean);
+                }
+                const base = baseOf();
+                if (!base) throw new Error('ベースURLが入力されていません。');
+                const res = await fetch(base + '/models', { headers: { 'Authorization': 'Bearer ' + key } });
+                const data = await res.json().catch(function() { return null; });
+                if (!res.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + res.status));
+                return (data.data || []).map(function(m) { return m.id; }).filter(Boolean);
+            }
+            function renderModelList(models) {
+                const sorted = models.slice().sort(function(a, b) {
+                    const aw = /whisper|transcri|audio/i.test(a) ? 0 : 1;
+                    const bw = /whisper|transcri|audio/i.test(b) ? 0 : 1;
+                    if (aw !== bw) return aw - bw;
+                    return a < b ? -1 : 1;
+                });
+                modelList.innerHTML = '';
+                sorted.forEach(function(id) {
+                    const b = document.createElement('button');
+                    b.className = 'voice-model-item';
+                    b.textContent = id;
+                    b.addEventListener('click', function() {
+                        cur().model = id;
+                        inpModel.value = id;
+                        saveSettings();
+                        modelList.classList.remove('show');
+                        setTestStatus('モデルIDに「' + id + '」を設定しました。', true);
+                    });
+                    modelList.appendChild(b);
+                });
+                modelList.classList.add('show');
+            }
+            testBtn.addEventListener('click', async function() {
+                testBtn.disabled = true;
+                setTestStatus('接続テスト中…', true);
+                modelList.classList.remove('show');
+                try {
+                    const models = await fetchModels();
+                    const model = (cur().model || '').trim();
+                    if (!model) {
+                        renderModelList(models);
+                        setTestStatus('接続OK。モデル一覧を取得しました（' + models.length + '件）。使うモデルをタップしてください。', true);
+                    } else if (models.indexOf(model) >= 0) {
+                        setTestStatus('接続OK。モデル「' + model + '」が見つかりました。', true);
+                    } else {
+                        renderModelList(models);
+                        setTestStatus('接続OK。ただしモデル「' + model + '」は一覧にありませんでした。一覧から選び直せます。', false);
+                    }
+                } catch (e) {
+                    setTestStatus('接続失敗: ' + (e && e.message ? e.message : e), false);
+                } finally {
+                    testBtn.disabled = false;
+                }
+            });
+
+            // --- 録音と文字起こし ---
+            let recorder = null;
+            let chunks = [];
+            let stream = null;
+            let recTimer = null;
+            let recording = false;
+            const MAX_REC_MS = 120000;
+
+            function stopStream() {
+                if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+                if (recTimer) { clearTimeout(recTimer); recTimer = null; }
+            }
+            function pickMime() {
+                const cands = ['audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm', ''];
+                for (const c of cands) {
+                    if (c === '') return '';
+                    try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c; } catch (e) { /* ignore */ }
+                }
+                return '';
+            }
+            function extOf(mime) {
+                if (/mp4/.test(mime)) return 'm4a';
+                if (/ogg/.test(mime)) return 'ogg';
+                if (/wav/.test(mime)) return 'wav';
+                return 'webm';
+            }
+            async function transcribe(blob, mime) {
+                const key = (cur().key || '').trim();
+                const model = (cur().model || '').trim();
+                if (vs.provider === 'gemini') {
+                    const buf = await blob.arrayBuffer();
+                    let bin = '';
+                    const bytes = new Uint8Array(buf);
+                    for (let i = 0; i < bytes.length; i += 0x8000) {
+                        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+                    }
+                    const b64 = btoa(bin);
+                    const res = await fetch(PRESETS.gemini.base + '/models/' + encodeURIComponent(model) + ':generateContent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+                        body: JSON.stringify({ contents: [{ parts: [
+                            { text: 'この音声を文字起こししてください。文字起こし結果のテキストだけを返してください。' },
+                            { inlineData: { mimeType: mime || 'audio/webm', data: b64 } }
+                        ] }] })
+                    });
+                    const data = await res.json().catch(function() { return null; });
+                    if (!res.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + res.status));
+                    const parts = (((data || {}).candidates || [])[0] || {}).content ? data.candidates[0].content.parts : null;
+                    return (parts || []).map(function(p) { return p.text || ''; }).join('').trim();
+                }
+                const base = baseOf();
+                if (!base) throw new Error('ベースURLが入力されていません。');
+                const fd = new FormData();
+                fd.append('file', blob, 'audio.' + extOf(mime));
+                fd.append('model', model);
+                const res = await fetch(base + '/audio/transcriptions', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + key },
+                    body: fd
+                });
+                const data = await res.json().catch(function() { return null; });
+                if (!res.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + res.status));
+                return ((data && data.text) || '').trim();
+            }
+            function finishRecording() {
+                if (!recording || !recorder) return;
+                recording = false;
+                btnMic.classList.remove('recording');
+                try { recorder.stop(); } catch (e) { /* ignore */ }
+            }
+            btnMic.addEventListener('click', async function() {
+                if (recording) { finishRecording(); return; }
+                const key = (cur().key || '').trim();
+                const model = (cur().model || '').trim();
+                if (!key) { showStatus('音声入力にはAPIキーが必要です。⚙️設定の「音声入力」タブで設定してください。'); return; }
+                if (!model) { showStatus('音声入力にはモデルIDが必要です。⚙️設定の「音声入力」タブで接続テストをしてモデルを選んでください。'); return; }
+                if (vs.provider === 'custom' && !baseOf()) { showStatus('カスタム提供元のベースURLが未設定です。⚙️設定の「音声入力」タブで入力してください。'); return; }
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+                    showStatus('このブラウザでは録音（MediaRecorder）に対応していません。');
+                    return;
+                }
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                } catch (e) {
+                    showStatus('マイクの使用が許可されませんでした。ブラウザの設定を確認してください。');
+                    return;
+                }
+                chunks = [];
+                const mime = pickMime();
+                try {
+                    recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+                } catch (e) {
+                    recorder = new MediaRecorder(stream);
+                }
+                const usedMime = recorder.mimeType || mime || 'audio/webm';
+                recorder.addEventListener('dataavailable', function(e) { if (e.data && e.data.size) chunks.push(e.data); });
+                recorder.addEventListener('stop', async function() {
+                    stopStream();
+                    const blob = new Blob(chunks, { type: usedMime });
+                    showStatus('文字起こし中…');
+                    try {
+                        const text = await transcribe(blob, usedMime);
+                        if (text) {
+                            if (window.__kbInsertText) window.__kbInsertText(text);
+                            showStatus('');
+                        } else {
+                            showStatus('音声を認識できませんでした。');
+                        }
+                    } catch (e) {
+                        showStatus('文字起こしに失敗しました: ' + (e && e.message ? e.message : e));
+                    }
+                });
+                recorder.start();
+                recording = true;
+                btnMic.classList.add('recording');
+                showStatus('録音中… もう一度🎤を押すと文字起こしします（最大120秒）。');
+                recTimer = setTimeout(finishRecording, MAX_REC_MS);
             });
         })();
 
