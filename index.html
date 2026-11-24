@@ -656,6 +656,19 @@
         .voice-test-btn:disabled {
             opacity: 0.6;
         }
+        .voice-disconnect-btn {
+            width: 100%;
+            padding: 9px;
+            background: #ffffff;
+            color: #c0272d;
+            border: 1px solid #c0272d;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        body.dark-theme .voice-disconnect-btn {
+            background: #222222;
+        }
         .voice-test-status {
             font-size: 12px;
             margin-top: 8px;
@@ -963,6 +976,10 @@
                     <button class="voice-test-btn" id="btnVoiceTest">接続テスト</button>
                     <div class="voice-test-status" id="voiceTestStatus"></div>
                     <div class="voice-model-list" id="voiceModelList"></div>
+                </div>
+                <div class="voice-field">
+                    <button class="voice-disconnect-btn" id="btnVoiceDisconnect">LLM切断</button>
+                    <div class="voice-note">現在の提供元のAPIキーとモデルIDを削除して、LLMとの接続を切ります。</div>
                 </div>
             </div>
             <button class="settings-close" id="btnCloseSettings">閉じる</button>
@@ -2340,22 +2357,44 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 setTestStatus('接続テスト中…', true);
                 modelList.classList.remove('show');
                 try {
-                    const models = await fetchModels();
+                    const allModels = await fetchModels();
+                    const models = filterTranscribable(allModels);
                     const model = (cur().model || '').trim();
                     if (!model) {
-                        renderModelList(models);
-                        setTestStatus('接続OK。モデル一覧を取得しました（' + models.length + '件）。使うモデルをタップしてください。', true);
+                        if (models.length === 0) {
+                            setTestStatus('接続OK。ただし音声文字起こしに使えるモデルが見つかりませんでした。', false);
+                        } else {
+                            renderModelList(models);
+                            setTestStatus('接続OK。音声文字起こしに使えるモデル一覧を取得しました（' + models.length + '件）。使うモデルをタップしてください。', true);
+                        }
                     } else if (models.indexOf(model) >= 0) {
                         setTestStatus('接続OK。モデル「' + model + '」が見つかりました。', true);
                     } else {
-                        renderModelList(models);
-                        setTestStatus('接続OK。ただしモデル「' + model + '」は一覧にありませんでした。一覧から選び直せます。', false);
+                        if (models.length) renderModelList(models);
+                        setTestStatus('接続OK。ただしモデル「' + model + '」は音声文字起こし用モデルの一覧にありませんでした。' + (models.length ? '一覧から選び直せます。' : ''), false);
                     }
                 } catch (e) {
                     setTestStatus('接続失敗: ' + (e && e.message ? e.message : e), false);
                 } finally {
                     testBtn.disabled = false;
                 }
+            });
+
+            function filterTranscribable(models) {
+                if (vs.provider === 'gemini') {
+                    return models.filter(function(id) {
+                        return /^gemini-/.test(id) && !/embedding|imagen|veo|tts|aqa|-live/i.test(id);
+                    });
+                }
+                return models.filter(function(id) { return /whisper|transcri/i.test(id); });
+            }
+            document.getElementById('btnVoiceDisconnect').addEventListener('click', function() {
+                const c = cur();
+                c.key = '';
+                c.model = '';
+                saveSettings();
+                refreshVoiceFields();
+                setTestStatus('LLMを切断しました（APIキーとモデルIDを削除しました）。', true);
             });
 
             // --- 録音と文字起こし ---
@@ -2367,8 +2406,41 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const MAX_REC_MS = 120000;
 
             function stopStream() {
+                stopVad();
                 if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
                 if (recTimer) { clearTimeout(recTimer); recTimer = null; }
+            }
+            let audioCtx = null;
+            let vadTimer = null;
+            function stopVad() {
+                if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
+                if (audioCtx) { try { audioCtx.close(); } catch (e) { /* ignore */ } audioCtx = null; }
+            }
+            function startVad(s) {
+                try {
+                    const AC = window.AudioContext || window.webkitAudioContext;
+                    if (!AC) return;
+                    audioCtx = new AC();
+                    const srcNode = audioCtx.createMediaStreamSource(s);
+                    const analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 512;
+                    srcNode.connect(analyser);
+                    const data = new Uint8Array(analyser.fftSize);
+                    let speechSeen = false;
+                    let lastSpeechAt = 0;
+                    vadTimer = setInterval(function() {
+                        if (!recording) { stopVad(); return; }
+                        analyser.getByteTimeDomainData(data);
+                        let sum = 0;
+                        for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
+                        const rms = Math.sqrt(sum / data.length);
+                        const now = Date.now();
+                        if (rms > 0.03) { speechSeen = true; lastSpeechAt = now; }
+                        else if (speechSeen && lastSpeechAt && now - lastSpeechAt > 1800) {
+                            finishRecording();
+                        }
+                    }, 120);
+                } catch (e) { /* VADが使えない環境では手動停止のみ */ }
             }
             function pickMime() {
                 const cands = ['audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm', ''];
@@ -2432,7 +2504,11 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 if (recording) { finishRecording(); return; }
                 const key = (cur().key || '').trim();
                 const model = (cur().model || '').trim();
-                if (!key) { showStatus('音声入力にはAPIキーが必要です。⚙️設定の「音声入力」タブで設定してください。'); return; }
+                if (!key) {
+                    document.getElementById('settingsOverlay').classList.add('show');
+                    switchTab(true);
+                    return;
+                }
                 if (!model) { showStatus('音声入力にはモデルIDが必要です。⚙️設定の「音声入力」タブで接続テストをしてモデルを選んでください。'); return; }
                 if (vs.provider === 'custom' && !baseOf()) { showStatus('カスタム提供元のベースURLが未設定です。⚙️設定の「音声入力」タブで入力してください。'); return; }
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
@@ -2473,7 +2549,8 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 recorder.start();
                 recording = true;
                 btnMic.classList.add('recording');
-                showStatus('録音中… もう一度🎤を押すと文字起こしします（最大120秒）。');
+                showStatus('録音中… 話し終えると自動で文字起こしします（🎤でも停止できます・最大120秒）。');
+                startVad(stream);
                 recTimer = setTimeout(finishRecording, MAX_REC_MS);
             });
         })();
