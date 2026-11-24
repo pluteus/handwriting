@@ -1,0 +1,52 @@
+name: Android APK
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/android-build.yml"
+      - "index.html"
+      - "about.html"
+      - "sw.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: 署名鍵を準備
+        run: |
+          if [ -f android/debug.keystore.b64 ]; then
+            base64 -d android/debug.keystore.b64 > android/app/debug.keystore
+            echo "固定デバッグ鍵で署名します（SHA-1 は android/SHA1.txt）"
+          fi
+
+      - name: Web資産（PWA本体）をアプリに同梱
+        run: |
+          mkdir -p android/app/src/main/assets/web
+          cp index.html about.html sw.js android/app/src/main/assets/web/
+          ls -l android/app/src/main/assets/web/
+
+      - name: デバッグAPKをビルド
+        working-directory: android
+        run: gradle assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: handwriting-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
