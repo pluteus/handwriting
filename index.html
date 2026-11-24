@@ -907,6 +907,17 @@
                     <div class="voice-note" style="font-size:12px;">OS標準の音声認識を使います（ChromeではGoogleの音声入力、SafariではAppleのディクテーション）。APIキーは不要です。対応していないブラウザでは使えません。キーボードアプリのマイクボタン（Gboardなど）からも入力できます。</div>
                 </div>
                 <div class="voice-field">
+                    <span class="voice-label">言語</span>
+                    <select class="settings-input settings-input-wide" id="voiceLang">
+                        <option value="ja-JP">日本語</option>
+                        <option value="en-US">English (US)</option>
+                        <option value="zh-CN">中文（简体）</option>
+                        <option value="ko-KR">한국어</option>
+                        <option value="">端末の既定（自動）</option>
+                    </select>
+                    <div class="voice-note">音声認識に使う言語です。日本語の声がローマ字で書き取られてしまう場合は「日本語」を選んでください。</div>
+                </div>
+                <div class="voice-field">
                     <button class="voice-test-btn" id="btnVoiceTest">対応チェック</button>
                     <div class="voice-test-status" id="voiceTestStatus"></div>
                 </div>
@@ -2172,6 +2183,21 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             const testBtn = document.getElementById('btnVoiceTest');
             const testStatus = document.getElementById('voiceTestStatus');
             function hasNativeBridge() { return !!(window.HandwritingAndroid && window.HandwritingAndroid.startSpeech); }
+            // --- 音声認識の言語設定 ---
+            const LS_LANG = 'hashirigaki-voice-lang-v1';
+            const selLang = document.getElementById('voiceLang');
+            let voiceLang = 'ja-JP';
+            try { const v = localStorage.getItem(LS_LANG); if (v !== null) voiceLang = v; } catch (e) { /* ignore */ }
+            if (selLang) {
+                selLang.value = voiceLang;
+                if (selLang.value !== voiceLang) { selLang.value = 'ja-JP'; voiceLang = 'ja-JP'; }
+                selLang.addEventListener('change', function() {
+                    voiceLang = selLang.value;
+                    try { localStorage.setItem(LS_LANG, voiceLang); } catch (e) { /* ignore */ }
+                });
+            }
+            function selectedLang() { return voiceLang; }
+            function effectiveLang() { return voiceLang || (navigator.language || 'ja-JP'); }
             if (testBtn) testBtn.addEventListener('click', function() {
                 const SRc = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (hasNativeBridge()) { testStatus.textContent = 'Android標準の音声認識に対応しています。🎤ボタンからそのまま使えます。'; testStatus.className = 'voice-test-status ok'; }
@@ -2199,7 +2225,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             function startOsRecognition() {
                 if (hasNativeBridge()) {
                     try {
-                        window.HandwritingAndroid.startSpeech();
+                        try { window.HandwritingAndroid.startSpeech(selectedLang()); } catch (e) { window.HandwritingAndroid.startSpeech(); }
                         osRecognizing = true;
                         btnMic.classList.add('recording');
                         showStatus('聞き取り中… 話し終えると自動で入力されます（🎤でも停止できます）。');
@@ -2211,7 +2237,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 let rec;
                 try { rec = new SR(); } catch (e) { showStatus('OS標準の音声認識を開始できませんでした。'); return; }
                 osRec = rec;
-                rec.lang = 'ja-JP';
+                rec.lang = effectiveLang();
                 rec.interimResults = false;
                 rec.maxAlternatives = 1;
                 rec.addEventListener('result', function(e) {
