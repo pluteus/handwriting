@@ -951,14 +951,18 @@
                         <option value="groq">Groq</option>
                         <option value="gemini">Google Gemini</option>
                         <option value="custom">カスタム（OpenAI互換API）</option>
+                        <option value="os">OS標準（ブラウザの音声認識）</option>
                     </select>
                 </div>
-                <div class="voice-field">
+                <div class="voice-field" id="voiceOsNote" style="display:none;">
+                    <div class="voice-note" style="font-size:12px;">OS標準の音声認識を使います（ChromeではGoogleの音声入力、SafariではAppleのディクテーション）。APIキーは不要です。対応していないブラウザでは使えません。</div>
+                </div>
+                <div class="voice-field" id="voiceKeyLinkRow">
                     <span class="voice-label">キー取得先</span>
                     <a class="voice-key-link" id="voiceKeyLink" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>
                     <div class="voice-note" id="voiceKeyNote"></div>
                 </div>
-                <div class="voice-field">
+                <div class="voice-field" id="voiceKeyRow">
                     <span class="voice-label">APIキー</span>
                     <input type="password" class="settings-input settings-input-wide" id="voiceApiKey" placeholder="APIキーを入力" autocomplete="off">
                     <div class="voice-note">キーはこの端末のブラウザ内にのみ保存され、メモの保存データには含まれません。</div>
@@ -967,7 +971,7 @@
                     <span class="voice-label">ベースURL</span>
                     <input type="text" class="settings-input settings-input-wide" id="voiceBaseUrl" placeholder="https://example.com/v1" autocomplete="off">
                 </div>
-                <div class="voice-field">
+                <div class="voice-field" id="voiceModelRow">
                     <span class="voice-label">モデルID</span>
                     <input type="text" class="settings-input settings-input-wide" id="voiceModelId" placeholder="whisper-1" autocomplete="off">
                     <div class="voice-note">空欄のまま接続テストすると、モデル一覧を取得して選べます。</div>
@@ -977,7 +981,7 @@
                     <div class="voice-test-status" id="voiceTestStatus"></div>
                     <div class="voice-model-list" id="voiceModelList"></div>
                 </div>
-                <div class="voice-field">
+                <div class="voice-field" id="voiceDiscRow">
                     <button class="voice-disconnect-btn" id="btnVoiceDisconnect">LLM切断</button>
                     <div class="voice-note">現在の提供元のAPIキーとモデルIDを削除して、LLMとの接続を切ります。</div>
                 </div>
@@ -2221,7 +2225,8 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 openai: { base: 'https://api.openai.com/v1', keyUrl: 'https://platform.openai.com/api-keys', keyLabel: 'platform.openai.com/api-keys', modelHint: 'whisper-1' },
                 groq:   { base: 'https://api.groq.com/openai/v1', keyUrl: 'https://console.groq.com/keys', keyLabel: 'console.groq.com/keys', modelHint: 'whisper-large-v3-turbo' },
                 gemini: { base: 'https://generativelanguage.googleapis.com/v1beta', keyUrl: 'https://aistudio.google.com/apikey', keyLabel: 'aistudio.google.com/apikey', modelHint: 'gemini-2.0-flash' },
-                custom: { base: '', keyUrl: '', keyLabel: '', modelHint: 'whisper-1' }
+                custom: { base: '', keyUrl: '', keyLabel: '', modelHint: 'whisper-1' },
+                os: { base: '', keyUrl: '', keyLabel: '', modelHint: '' }
             };
             const btnMic = document.getElementById('btnMic');
             const statusEl = document.getElementById('voiceStatus');
@@ -2232,7 +2237,7 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                     const s = JSON.parse(localStorage.getItem(LS_VOICE) || 'null');
                     if (s && s.p) return s;
                 } catch (e) { /* ignore */ }
-                return { provider: 'openai', p: { openai: { key: '', model: '' }, groq: { key: '', model: '' }, gemini: { key: '', model: '' }, custom: { key: '', model: '', base: '' } } };
+                return { provider: 'openai', p: { openai: { key: '', model: '' }, groq: { key: '', model: '' }, gemini: { key: '', model: '' }, custom: { key: '', model: '', base: '' }, os: { key: '', model: '' } } };
             }
             let vs = loadSettings();
             function saveSettings() {
@@ -2298,6 +2303,13 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 testStatus.className = 'voice-test-status';
                 modelList.classList.remove('show');
                 modelList.innerHTML = '';
+                const isOs = (vs.provider === 'os');
+                document.getElementById('voiceKeyLinkRow').style.display = isOs ? 'none' : '';
+                document.getElementById('voiceKeyRow').style.display = isOs ? 'none' : '';
+                document.getElementById('voiceModelRow').style.display = isOs ? 'none' : '';
+                document.getElementById('voiceDiscRow').style.display = isOs ? 'none' : '';
+                document.getElementById('voiceOsNote').style.display = isOs ? '' : 'none';
+                testBtn.textContent = isOs ? '対応チェック' : '接続テスト';
             }
             selProvider.addEventListener('change', function() {
                 vs.provider = selProvider.value;
@@ -2354,6 +2366,13 @@ document.getElementById('btnRedo').addEventListener('click', redo);
             }
             testBtn.addEventListener('click', async function() {
                 testBtn.disabled = true;
+                if (vs.provider === 'os') {
+                    const SRo = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    if (SRo) setTestStatus('このブラウザはOS標準の音声認識に対応しています。🎤ボタンからそのまま使えます。', true);
+                    else setTestStatus('このブラウザはOS標準の音声認識（SpeechRecognition）に対応していません。ChromeまたはSafariでお試しください。', false);
+                    testBtn.disabled = false;
+                    return;
+                }
                 setTestStatus('接続テスト中…', true);
                 modelList.classList.remove('show');
                 try {
@@ -2500,8 +2519,50 @@ document.getElementById('btnRedo').addEventListener('click', redo);
                 btnMic.classList.remove('recording');
                 try { recorder.stop(); } catch (e) { /* ignore */ }
             }
+            let osRec = null;
+            let osRecognizing = false;
+            function stopOsRecognition() {
+                if (osRec) { try { osRec.stop(); } catch (e) { /* ignore */ } }
+            }
+            function startOsRecognition() {
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SR) { showStatus('このブラウザではOS標準の音声認識に対応していません。ChromeやSafariでお試しください。'); return; }
+                let rec;
+                try { rec = new SR(); } catch (e) { showStatus('OS標準の音声認識を開始できませんでした。'); return; }
+                osRec = rec;
+                rec.lang = 'ja-JP';
+                rec.interimResults = false;
+                rec.maxAlternatives = 1;
+                rec.addEventListener('result', function(e) {
+                    let text = '';
+                    for (let i = 0; i < e.results.length; i++) {
+                        if (e.results[i].isFinal) text += e.results[i][0].transcript;
+                    }
+                    text = text.trim();
+                    if (text && window.__kbInsertText) window.__kbInsertText(text);
+                });
+                rec.addEventListener('error', function(e) {
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') showStatus('マイクの使用が許可されませんでした。ブラウザの設定を確認してください。');
+                    else if (e.error === 'no-speech') showStatus('音声を認識できませんでした。');
+                    else if (e.error !== 'aborted') showStatus('音声認識でエラーが発生しました: ' + e.error);
+                });
+                rec.addEventListener('end', function() {
+                    osRecognizing = false;
+                    osRec = null;
+                    btnMic.classList.remove('recording');
+                    if (statusEl.textContent.indexOf('聞き取り中') === 0) showStatus('');
+                });
+                try {
+                    rec.start();
+                    osRecognizing = true;
+                    btnMic.classList.add('recording');
+                    showStatus('聞き取り中… 話し終えると自動で入力されます（🎤でも停止できます）。');
+                } catch (e) { /* 既に開始済み */ }
+            }
             btnMic.addEventListener('click', async function() {
                 if (recording) { finishRecording(); return; }
+                if (osRecognizing) { stopOsRecognition(); return; }
+                if (vs.provider === 'os') { startOsRecognition(); return; }
                 const key = (cur().key || '').trim();
                 const model = (cur().model || '').trim();
                 if (!key) {
